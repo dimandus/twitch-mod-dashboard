@@ -308,11 +308,192 @@ const TWITCH_SCOPES = [
 
 // ----------------- Twitch OAuth (прямой) -----------------
 
-async function startTwitchLogin() { /* неизменённый блок из твоего кода */ }
+async function startTwitchLogin() {
+  const clientId = store.get('twitch.clientId');
+  const clientSecret = store.get('twitch.clientSecret');
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Сначала укажи Client ID и Client Secret в настройках.');
+  }
+
+  const redirectPort = 58585;
+  const redirectPath = '/auth/twitch/callback';
+  const redirectUri = `http://localhost:${redirectPort}${redirectPath}`;
+  const state = Math.random().toString(36).slice(2);
+  const scope = TWITCH_SCOPES.join(' ');
+
+  const authUrl =
+    'https://id.twitch.tv/oauth2/authorize' +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent(scope)}` +
+    `&state=${encodeURIComponent(state)}`;
+
+  return new Promise((resolve, reject) => {
+    let server;
+    let finished = false;
+    let timeoutId;
+
+    const cleanup = () => {
+      if (finished) return;
+      finished = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (server) try { server.close(); } catch {}
+    };
+
+    server = http.createServer(async (req, res) => {
+      try {
+        if (!req.url.startsWith(redirectPath)) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+
+        const fullUrl = new URL(req.url, `http://localhost:${redirectPort}`);
+        const code = fullUrl.searchParams.get('code');
+        const error = fullUrl.searchParams.get('error');
+
+        if (error) {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end('<html><body>Ошибка.</body></html>');
+          cleanup();
+          return reject(new Error('Auth error: ' + error));
+        }
+
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(
+          '<html><script>setTimeout(function(){window.close();},1000);</script><body>OK</body></html>'
+        );
+
+        const tokenRes = await nodeFetch('https://id.twitch.tv/oauth2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            code,
+            grant_type: 'authorization_code',
+            redirect_uri: redirectUri
+          }).toString()
+        });
+
+        const tokenJson = await tokenRes.json();
+        if (!tokenRes.ok) {
+          cleanup();
+          return reject(new Error(tokenJson.message));
+        }
+
+        const userRes = await nodeFetch('https://api.twitch.tv/helix/users', {
+          headers: {
+            'Client-Id': clientId,
+            Authorization: `Bearer ${tokenJson.access_token}`
+          }
+        });
+        const userJson = await userRes.json();
+        const user = userJson.data[0];
+
+        store.set('twitch.accessToken', tokenJson.access_token);
+        store.set('twitch.refreshToken', tokenJson.refresh_token);
+        store.set('twitch.scopes', tokenJson.scope);
+        store.set('twitch.userId', user.id);
+        store.set('twitch.login', user.login);
+        store.set('twitch.authMode', 'direct');
+
+        cleanup();
+        resolve({ login: user.login, userId: user.id });
+      } catch (err) {
+        cleanup();
+        reject(err);
+      }
+    });
+
+    server.listen(redirectPort, '127.0.0.1', (err) => {
+      if (err) {
+        cleanup();
+        return reject(err);
+      }
+      shell.openExternal(authUrl);
+      timeoutId = setTimeout(() => {
+        cleanup();
+        reject(new Error('Timeout'));
+      }, 300000);
+    });
+  });
+}
 
 // ----------------- Twitch OAuth через Dimandus -----------------
 
-async function startTwitchDimandusAuth() { /* неизменённый блок из твоего кода */ }
+async function startTwitchDimandusAuth() {
+  const scopeParam = TWITCH_SCOPES.join('+');
+  const initUrl = `${DIMANDUS_BASE_URL}/api/auth/twitch/init?scope=${encodeURIComponent(
+    scopeParam
+  )}`;
+
+  const initRes = await fetchDimandus(initUrl);
+  if (!initRes.ok) throw new Error(`Init error: ${initRes.status}`);
+
+  const initJson = await initRes.json();
+  const { auth_url, session_id } = initJson;
+
+  shell.openExternal(auth_url);
+
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    let finished = false;
+    const timer = setInterval(async () => {
+      if (finished) return;
+      attempts++;
+      if (attempts > 60) {
+        finished = true;
+        clearInterval(timer);
+        return reject(new Error('Timeout'));
+      }
+
+      try {
+        const statusRes = await fetchDimandus(
+          `${DIMANDUS_BASE_URL}/api/auth/twitch/status/${session_id}`
+        );
+        if (!statusRes.ok) return;
+        const statusJson = await statusRes.json();
+
+        if (statusJson.status === 'completed') {
+          finished = true;
+          clearInterval(timer);
+
+          const userRes = await nodeFetch('https://api.twitch.tv/helix/users', {
+            headers: {
+              'Client-Id': DIMANDUS_TWITCH_CLIENT_ID,
+              Authorization: `Bearer ${statusJson.access_token}`
+            }
+          });
+          const userJson = await userRes.json();
+          const user = userJson.data[0];
+
+          store.set('twitch.accessToken', statusJson.access_token);
+          store.set('twitch.refreshToken', statusJson.refresh_token);
+          store.set('twitch.scopes', statusJson.scope);
+          store.set('twitch.userId', user.id);
+          store.set('twitch.login', user.login);
+          store.set('twitch.authMode', 'dimandus');
+          store.delete('twitch.clientSecret');
+          store.set('twitch.clientId', DIMANDUS_TWITCH_CLIENT_ID);
+
+          resolve({ login: user.login, userId: user.id });
+        } else if (
+          statusJson.status === 'error' ||
+          statusJson.status === 'expired'
+        ) {
+          finished = true;
+          clearInterval(timer);
+          reject(new Error(statusJson.error || 'Auth failed'));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }, 2000);
+  });
+}
 
 // ----------------- Helix Implementation -----------------
 
@@ -322,14 +503,93 @@ const KNOWN_BOTS = new Set([
   'streamelements',
   'fossabot',
   'deepbot',
-  'phantombot'
+  'phantombot',
+  'streamlabs',
+  'stay_hydrated_bot',
+  'commanderroot',
+  'wizebot'
 ]);
 
-async function getBroadcasterIdByLogin(channelLogin) { /* как у тебя */ }
+async function getBroadcasterIdByLogin(channelLogin) {
+  const login = (channelLogin || '').toLowerCase().replace('#', '').trim();
+  if (!login) throw new Error('Empty login');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`
+  );
+  const json = await res.json();
+  if (!res.ok || !json.data || !json.data[0]) throw new Error('Channel not found');
+  return json.data[0].id;
+}
 
-async function getUserIdByLogin(userLogin) { /* как у тебя */ }
+async function getUserIdByLogin(userLogin) {
+  const login = (userLogin || '').toLowerCase().trim();
+  if (!login) throw new Error('Empty login');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`
+  );
+  const json = await res.json();
+  if (!res.ok || !json.data || !json.data[0]) throw new Error('User not found');
+  return json.data[0].id;
+}
 
-async function fetchChannelChattersHelix(channelLogin) { /* как у тебя */ }
+// Chatters
+async function fetchChannelChattersHelix(channelLogin) {
+  const moderatorId = store.get('twitch.userId');
+  const broadcasterId = await getBroadcasterIdByLogin(channelLogin);
+
+  // Можем получить список модераторов ТОЛЬКО если мы сами владелец канала
+  let moderatorIds = [];
+
+  if (broadcasterId === moderatorId) {
+    try {
+      let res = await helixFetch(
+        `https://api.twitch.tv/helix/moderation/moderators?broadcaster_id=${broadcasterId}`
+      );
+      let json = await res.json();
+      if (res.ok && json.data) {
+        moderatorIds = json.data.map((m) => m.user_id);
+      }
+    } catch (e) {
+      console.warn(
+        '[Chatters] Не удалось загрузить список модераторов (возможно, нет прав):',
+        e.message
+      );
+    }
+  }
+
+  const allChatters = [];
+  let cursor = null;
+
+  try {
+    do {
+      const url = new URL('https://api.twitch.tv/helix/chat/chatters');
+      url.searchParams.set('broadcaster_id', broadcasterId);
+      url.searchParams.set('moderator_id', moderatorId);
+      url.searchParams.set('first', '1000');
+      if (cursor) url.searchParams.set('after', cursor);
+
+      const res = await helixFetch(url.toString());
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.warn(
+          `[Chatters] Ошибка доступа к зрителям канала ${channelLogin}: ${res.status}`
+        );
+        break;
+      }
+
+      if (json.data) allChatters.push(...json.data);
+      cursor = json.pagination?.cursor;
+    } while (cursor);
+  } catch (err) {
+    console.warn(
+      `[Chatters] Глобальная ошибка при получении зрителей ${channelLogin}:`,
+      err.message
+    );
+  }
+
+  return { broadcasterId, moderatorIds, chatters: allChatters };
+}
 
 async function fetchModeratedChannelsHelix() {
   const userId = store.get('twitch.userId');
@@ -340,33 +600,290 @@ async function fetchModeratedChannelsHelix() {
   return json.data || [];
 }
 
-async function fetchFollowedChannelsHelix() { /* как у тебя */ }
+async function fetchFollowedChannelsHelix() {
+  const userId = store.get('twitch.userId');
+  const allChannels = [];
+  let cursor = null;
+  do {
+    const url = new URL('https://api.twitch.tv/helix/channels/followed');
+    url.searchParams.set('user_id', userId);
+    url.searchParams.set('first', '100');
+    if (cursor) url.searchParams.set('after', cursor);
+    const res = await helixFetch(url.toString());
+    const json = await res.json();
+    if (res.ok && json.data) allChannels.push(...json.data);
+    cursor = json.pagination?.cursor;
+  } while (cursor);
+  return allChannels;
+}
 
-async function fetchChannelsLiveStatusHelix(logins) { /* как у тебя */ }
+async function fetchChannelsLiveStatusHelix(logins) {
+  const lower = Array.from(
+    new Set(
+      (logins || [])
+        .map((l) => (l || '').toLowerCase().trim())
+        .filter(Boolean)
+    )
+  );
+  if (!lower.length) return [];
 
-async function fetchUsersInfoHelix(logins) { /* как у тебя */ }
+  const currentUserId = store.get('twitch.userId');
 
-async function getUserDetailsHelix(userLogin) { /* как у тебя */ }
+  const userMap = new Map();
+  // Batch users
+  for (let i = 0; i < lower.length; i += 100) {
+    const chunk = lower.slice(i, i + 100);
+    const url = new URL('https://api.twitch.tv/helix/users');
+    chunk.forEach((l) => url.searchParams.append('login', l));
+    const res = await helixFetch(url.toString());
+    const json = await res.json();
+    if (json.data) json.data.forEach((u) => userMap.set(u.login.toLowerCase(), u));
+  }
 
-async function banUserHelix(channel, user, duration, reason) { /* как у тебя */ }
+  const ids = Array.from(new Set([...userMap.values()].map((u) => u.id)));
+  const streamMap = new Map();
+  // Batch streams
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const url = new URL('https://api.twitch.tv/helix/streams');
+    chunk.forEach((id) => url.searchParams.append('user_id', id));
+    const res = await helixFetch(url.toString());
+    const json = await res.json();
+    if (json.data) json.data.forEach((s) => streamMap.set(s.user_id, s));
+  }
 
-async function unbanUserHelix(channel, user) { /* как у тебя */ }
+  const statuses = [];
+  for (const login of lower) {
+    const user = userMap.get(login);
+    if (!user) {
+      statuses.push({
+        login,
+        isLive: false,
+        title: null,
+        viewerCount: null,
+        modCount: null
+      });
+      continue;
+    }
+    const stream = streamMap.get(user.id);
+    let modCount = null;
 
-async function deleteMessageHelix(channel, msgId) { /* как у тебя */ }
+    // Запрашиваем модов ТОЛЬКО для своего канала
+    if (user.id === currentUserId) {
+      try {
+        const res = await helixFetch(
+          `https://api.twitch.tv/helix/moderation/moderators?broadcaster_id=${user.id}`
+        );
+        const json = await res.json();
+        if (res.ok && json.data) {
+          modCount = json.data.filter(
+            (m) => !KNOWN_BOTS.has(m.user_login.toLowerCase())
+          ).length;
+        }
+      } catch (e) {
+        // игнор
+      }
+    }
 
-async function clearChatHelix(channel) { /* как у тебя */ }
+    statuses.push({
+      login,
+      isLive: !!stream,
+      title: stream?.title || null,
+      viewerCount: stream?.viewer_count || 0,
+      modCount
+    });
+  }
+  return statuses;
+}
 
-async function updateChatSettingsHelix(channel, settings) { /* как у тебя */ }
+async function fetchUsersInfoHelix(logins) {
+  const lower = Array.from(
+    new Set(logins.map((l) => l.toLowerCase().trim()).filter(Boolean))
+  );
+  if (!lower.length) return [];
+  const result = [];
+  for (let i = 0; i < lower.length; i += 100) {
+    const url = new URL('https://api.twitch.tv/helix/users');
+    lower.slice(i, i + 100).forEach((l) => url.searchParams.append('login', l));
+    const res = await helixFetch(url.toString());
+    const json = await res.json();
+    if (json.data) {
+      result.push(
+        ...json.data.map((u) => ({
+          login: u.login.toLowerCase(),
+          displayName: u.display_name,
+          avatarUrl: u.profile_image_url,
+          bannerUrl: u.offline_image_url
+        }))
+      );
+    }
+  }
+  return result;
+}
 
-async function getChatSettingsHelix(channel) { /* как у тебя */ }
+// Полные данные о пользователе
+async function getUserDetailsHelix(userLogin) {
+  const login = (userLogin || '').toLowerCase().trim();
+  if (!login) throw new Error('Empty login');
 
-async function getShieldModeHelix(channel) { /* как у тебя */ }
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`
+  );
+  const json = await res.json();
+  if (!res.ok || !json.data || !json.data[0]) {
+    throw new Error('User not found');
+  }
 
-async function updateShieldModeHelix(channel, isActive) { /* как у тебя */ }
+  return json.data[0];
+}
 
-async function sendAnnouncementHelix(channel, message, color) { /* как у тебя */ }
+// Moderation Actions
+async function banUserHelix(channel, user, duration, reason) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const uid = await getUserIdByLogin(user);
+  const body = { data: { user_id: uid, reason: reason || '' } };
+  if (duration) body.data.duration = duration;
 
-async function sendChatMessageHelix(channel, message) { /* как у тебя */ }
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${bid}&moderator_id=${mid}`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }
+  );
+  if (!res.ok) throw new Error((await res.json()).message);
+  return { success: true };
+}
+
+async function unbanUserHelix(channel, user) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const uid = await getUserIdByLogin(user);
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${bid}&moderator_id=${mid}&user_id=${uid}`,
+    {
+      method: 'DELETE'
+    }
+  );
+  if (!res.ok) throw new Error((await res.json()).message);
+  return { success: true };
+}
+
+async function deleteMessageHelix(channel, msgId) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/moderation/chat?broadcaster_id=${bid}&moderator_id=${mid}&message_id=${msgId}`,
+    {
+      method: 'DELETE'
+    }
+  );
+  if (!res.ok) throw new Error('Failed to delete');
+  return { success: true };
+}
+
+async function clearChatHelix(channel) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/moderation/chat?broadcaster_id=${bid}&moderator_id=${mid}`,
+    {
+      method: 'DELETE'
+    }
+  );
+  if (!res.ok) throw new Error('Failed to clear');
+  return { success: true };
+}
+
+// Chat Settings & Shield
+async function updateChatSettingsHelix(channel, settings) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/chat/settings?broadcaster_id=${bid}&moderator_id=${mid}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(settings)
+    }
+  );
+  return (await res.json()).data?.[0] || { success: true };
+}
+
+async function getChatSettingsHelix(channel) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/chat/settings?broadcaster_id=${bid}&moderator_id=${mid}`
+  );
+  return (await res.json()).data?.[0] || {};
+}
+
+async function getShieldModeHelix(channel) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/moderation/shield_mode?broadcaster_id=${bid}&moderator_id=${mid}`
+  );
+  return (await res.json()).data?.[0] || { is_active: false };
+}
+
+async function updateShieldModeHelix(channel, isActive) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/moderation/shield_mode?broadcaster_id=${bid}&moderator_id=${mid}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: isActive })
+    }
+  );
+  return (await res.json()).data?.[0] || { is_active: isActive };
+}
+
+async function sendAnnouncementHelix(channel, message, color) {
+  const bid = await getBroadcasterIdByLogin(channel);
+  const mid = store.get('twitch.userId');
+  const res = await helixFetch(
+    `https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${bid}&moderator_id=${mid}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ message, color })
+    }
+  );
+  if (!res.ok) throw new Error('Announcement failed');
+  return { success: true };
+}
+
+// Отправка обычного чата через Helix (chat/messages)
+async function sendChatMessageHelix(channel, message) {
+  const bid = await getBroadcasterIdByLogin(channel);   // broadcaster_id
+  const senderId = store.get('twitch.userId');          // sender_id (наш userId)
+
+  if (!senderId) {
+    throw new Error('Нет twitch.userId в конфиге, пользователь не авторизован');
+  }
+
+  const body = {
+    broadcaster_id: bid,
+    sender_id: senderId,
+    message
+  };
+
+  const res = await helixFetch('https://api.twitch.tv/helix/chat/messages', {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    throw new Error(json?.message || 'Не удалось отправить сообщение через Helix');
+  }
+
+  const data = json.data && json.data[0];
+  return { messageId: data?.message_id };
+}
 
 // ----------------- IPC EXPORTS -----------------
 
@@ -452,10 +969,12 @@ ipcMain.handle('twitch:emoteOnly', (e, ch, en) =>
   updateChatSettingsHelix(ch, { emote_mode: en })
 );
 
+// Отправка сообщения через Helix chat/messages
 ipcMain.handle('twitch:sendChatMessage', (e, ch, msg) =>
   sendChatMessageHelix(ch, msg)
 );
 
+// Гарантировать свежий accessToken перед подключением чата
 ipcMain.handle('twitch:ensureAccessToken', () =>
   ensureAccessTokenHelix()
 );
