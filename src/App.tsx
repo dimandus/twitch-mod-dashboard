@@ -41,6 +41,8 @@ interface GlobalUserData {
   badges: string[];
   messages: UserLogMessage[];
   lastSeen: number;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
 }
 
 // Активный чаттер для списка зрителей
@@ -51,6 +53,8 @@ export interface ActiveChatter {
   color?: string;
   badges: string[];
   lastSeen: number;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
 }
 
 interface PendingSelfMessage {
@@ -70,6 +74,7 @@ const App: React.FC = () => {
   const [currentUserLogin, setCurrentUserLogin] = useState<string | null>(null);
   const joinedRef = useRef<Set<string>>(new Set());
   const modeChangeTimestamps = useRef<Record<string, number>>({});
+  const globalUsersRef = useRef<Record<string, GlobalUserData>>({});
   const pendingSelfMessagesRef = useRef<
     Record<string, PendingSelfMessage[]>
   >({});
@@ -79,9 +84,66 @@ const App: React.FC = () => {
     {}
   );
 
+useEffect(() => {
+  globalUsersRef.current = globalUsers;
+}, [globalUsers]);
+
   const [activeChatters, setActiveChatters] = useState<
     Record<string, Map<string, ActiveChatter>>
   >({});
+
+// Подтягиваем доп.инфу о пользователях (аватар/баннер) через Helix
+useEffect(() => {
+  const users = Object.values(globalUsers);
+  // выбираем тех, для кого ещё нет ни аватара, ни баннера
+  const toFetch = users.filter(
+    (u) => !u.avatarUrl && !u.bannerUrl
+  );
+  if (toFetch.length === 0) return;
+
+  let cancelled = false;
+
+  const fetchInfo = async () => {
+    try {
+      const logins = Array.from(
+        new Set(toFetch.map((u) => u.login.toLowerCase()))
+      );
+      const infos =
+        await window.electronAPI.twitch.getUsersInfo(logins);
+      if (cancelled || !infos) return;
+
+      const infoMap = new Map(
+        infos.map((i: any) => [i.login.toLowerCase(), i])
+      );
+
+      setGlobalUsers((prev) => {
+        const next = { ...prev };
+        for (const [loginLower, user] of Object.entries(next)) {
+          const info = infoMap.get(loginLower);
+          if (!info) continue;
+          next[loginLower] = {
+            ...user,
+            displayName: info.displayName || user.displayName,
+            avatarUrl:
+              info.avatarUrl ?? user.avatarUrl ?? null,
+            bannerUrl:
+              info.bannerUrl ?? user.bannerUrl ?? null
+          };
+        }
+        return next;
+      });
+    } catch (err) {
+      console.warn('[App] getUsersInfo для globalUsers не удался', err);
+    }
+  };
+
+  // чуть откладываем, чтобы не спамить при бурных событиях
+  const timeoutId = setTimeout(fetchInfo, 1000);
+  return () => {
+    cancelled = true;
+    clearTimeout(timeoutId);
+  };
+}, [globalUsers]);
 
   const [userLogOpen, setUserLogOpen] = useState<UserLogData | null>(null);
   const [userProfileLogin, setUserProfileLogin] = useState<string | null>(null);
@@ -525,27 +587,35 @@ if (mentionedSelf) {
               }
             };
           });
+		  
+		  
 
-                    setActiveChatters((prev) => {
-            const channelChatters = new Map(prev[chanLower] || []);
-            channelChatters.set(odaterId, {
-              odaterId,
-              login: tags.username || '',
-              displayName:
-                tags['display-name'] || tags.username || '',
-              color: tags.color,
-              badges: Object.keys(tags.badges || {}),
-              lastSeen: Date.now()
-            });
-            
-            // ✅ Диагностика ВНУТРИ callback
-            console.log('[App] activeChatters обновлён:', {
-              channel: chanLower,
-              newCount: channelChatters.size
-            });
-            
-            return { ...prev, [chanLower]: channelChatters };
-          });
+            setActiveChatters((prev) => {
+  const channelChatters = new Map(prev[chanLower] || []);
+
+  const userData = globalUsersRef.current[loginLower];
+
+  channelChatters.set(odaterId, {
+    odaterId,
+    login: tags.username || '',
+    displayName:
+      tags['display-name'] || tags.username || '',
+    color: tags.color,
+    badges: Object.keys(tags.badges || {}),
+    lastSeen: Date.now(),
+    avatarUrl: userData?.avatarUrl ?? null,
+    bannerUrl: userData?.bannerUrl ?? null
+  });
+
+  console.log('[App] activeChatters обновлён:', {
+    channel: chanLower,
+    newCount: channelChatters.size
+  });
+
+  return { ...prev, [chanLower]: channelChatters };
+});
+		  
+		  
         });
 
         // Удаление одного сообщения

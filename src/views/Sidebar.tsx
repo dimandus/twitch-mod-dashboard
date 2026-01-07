@@ -22,6 +22,9 @@ interface ViewerEntry {
   avatarUrl?: string | null;
   displayName?: string | null;
   bannerUrl?: string | null;
+  badges?: string[];
+  lastSeen?: number;
+  isFromFallback?: boolean;
 }
 
 interface ChannelStatus {
@@ -72,7 +75,6 @@ interface SidebarProps {
   onOpenUserLog: (userLogin: string) => void;
   onOpenUserProfile: (userLogin: string) => void;
   activeChatters: Record<string, Map<string, ActiveChatter>>;
-
   fontScale: number;
   globalScale: number;
 }
@@ -233,7 +235,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('resize', updateAutoScale);
   }, []);
 
-  // Закрытие контекстных меню
+  // Закрытие контекстных меню — только по клику
   useEffect(() => {
     const close = () => {
       setChannelContextMenu((prev) =>
@@ -248,10 +250,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       );
     };
     window.addEventListener('click', close);
-    window.addEventListener('scroll', close, true);
     return () => {
       window.removeEventListener('click', close);
-      window.removeEventListener('scroll', close, true);
     };
   }, []);
 
@@ -259,6 +259,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     if (!selectedChannel) return;
     let cancelled = false;
+
     const refresh = async () => {
       try {
         const { viewers: list, fallback } =
@@ -276,6 +277,8 @@ const Sidebar: React.FC<SidebarProps> = ({
           setViewersError(err?.message || 'Ошибка');
       }
     };
+
+    refresh();
     const intervalId = setInterval(refresh, 30000);
     return () => {
       cancelled = true;
@@ -333,26 +336,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [channels]);
 
   // Выбор канала
-  const handleSelectChannel = async (channelLogin: string) => {
+  const handleSelectChannel = (channelLogin: string) => {
     setSelectedChannel(channelLogin);
     onChannelSelected(channelLogin);
-    setViewers([]);
-    setViewersError(null);
-    setViewersLoading(true);
-    setUsingFallback(false);
-    try {
-      const { viewers: list, fallback } =
-        await fetchChattersForChannel(
-          channelLogin,
-          activeChatters[channelLogin.toLowerCase()]
-        );
-      setViewers(list);
-      setUsingFallback(fallback);
-    } catch (err: any) {
-      setViewersError(err?.message || 'Ошибка загрузки зрителей');
-    } finally {
-      setViewersLoading(false);
-    }
   };
 
   // Добавление канала
@@ -378,7 +364,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     } catch {}
     setIsAddChannelOpen(false);
     setAddChannelError(null);
-    void handleSelectChannel(raw);
+    handleSelectChannel(raw);
   };
 
   // Импорт мод-каналов
@@ -580,7 +566,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     });
   };
 
-  // Фильтрация каналов
+  // Фильтрация каналов и определение "модерский" канал
   const moderatedSet = new Set(
     moderatedLogins.map((l) => l.toLowerCase())
   );
@@ -599,6 +585,13 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (yA !== yB) return yA - yB;
     return a.localeCompare(b);
   });
+
+  const isModeratorMode =
+    !!selectedChannel &&
+    (
+      (!usingFallback && viewers.length > 0) ||
+      moderatedSet.has(selectedChannel.toLowerCase())
+    );
 
   const textScale = fontScale * globalScale * autoScale;
 
@@ -849,11 +842,25 @@ const Sidebar: React.FC<SidebarProps> = ({
               <div style={{ ...sectionHeaderStyle, fontSize: 12 * textScale }}>
                 <span>
                   Зрители{' '}
-                  {usingFallback && (
+                  {selectedChannel && (
                     <span
                       style={{
-                        color: '#f59e0b',
-                        marginLeft: 4
+                        marginLeft: 4,
+                        fontSize: 10 * textScale,
+                        color: isModeratorMode ? '#22c55e' : '#9ca3af'
+                      }}
+                    >
+                      {isModeratorMode
+                        ? 'Модер. режим'
+                        : 'Юзерский режим'}
+                    </span>
+                  )}
+                  {!isModeratorMode && usingFallback && (
+                    <span
+                      style={{
+                        marginLeft: 4,
+                        fontSize: 10 * textScale,
+                        color: '#f59e0b'
                       }}
                     >
                       (из чата)
@@ -922,73 +929,126 @@ const Sidebar: React.FC<SidebarProps> = ({
                   !viewersError &&
                   viewers.length > 0 && (
                     <div>
-                      {viewers.map((v) => {
-                        const isModOrBroadcastor =
-                          v.role === 'broadcaster' ||
-                          v.role === 'moderator';
-                        const bgStyle = isModOrBroadcastor
-                          ? {
-                              background:
-                                'rgba(255,255,255,0.05)',
-                              borderLeft:
-                                '3px solid #9147ff'
-                            }
-                          : {};
-                        return (
-                          <div
-                            key={v.login + v.role}
-                            onContextMenu={(e) =>
-                              handleViewerContextMenu(e, v)
-                            }
-                            style={{
-                              ...viewerItemStyle,
-                              ...bgStyle,
-                              cursor: 'context-menu'
-                            }}
-                          >
+                      {(() => {
+                        const now = Date.now();
+                        const maxAgeMs = 5 * 60 * 1000;
+
+                        return viewers.map((v) => {
+                          const hasModBadge =
+                            (v.badges || []).some(
+                              (b) =>
+                                b.toLowerCase() === 'broadcaster' ||
+                                b.toLowerCase() === 'moderator'
+                            );
+
+                          const isModOrBroadcastor =
+                            v.role === 'broadcaster' ||
+                            v.role === 'moderator' ||
+                            hasModBadge;
+
+                          const roleBgStyle = isModOrBroadcastor
+                            ? {
+                                backgroundColor: 'rgba(0,0,0,0.4)',
+                                borderLeft: '3px solid #9147ff'
+                              }
+                            : {};
+
+                          const bannerStyle: React.CSSProperties = v.bannerUrl
+                            ? {
+                                backgroundImage: `url(${v.bannerUrl})`,
+                                backgroundPosition: 'center top',
+                                backgroundSize: 'cover',
+                                backgroundRepeat: 'no-repeat'
+                              }
+                            : {};
+
+                          let activityDot: React.ReactNode = null;
+                          if (
+                            v.isFromFallback &&
+                            typeof v.lastSeen === 'number'
+                          ) {
+                            const ageMs = now - v.lastSeen;
+                            const clampedAge = Math.min(
+                              Math.max(ageMs, 0),
+                              maxAgeMs
+                            );
+                            const ratio = clampedAge / maxAgeMs;
+                            const progress = 1 - ratio;
+
+                            activityDot = (
+                              <div
+                                style={activityDotStyle(progress)}
+                                title={`Активность: ${
+                                  Math.round(progress * 100)
+                                }% (последнее сообщение ≈ ${
+                                  Math.max(
+                                    0,
+                                    Math.round(ageMs / 60000)
+                                  ) || 0
+                                } мин назад)`}
+                              />
+                            );
+                          }
+
+                          return (
                             <div
+                              key={v.login + v.role}
+                              onContextMenu={(e) =>
+                                handleViewerContextMenu(e, v)
+                              }
                               style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                width: '100%'
+                                ...viewerItemStyle,
+                                ...bannerStyle,
+                                ...roleBgStyle,
+                                cursor: 'context-menu'
                               }}
                             >
-                              {v.avatarUrl && (
-                                <img
-                                  src={v.avatarUrl}
-                                  alt={v.login}
-                                  style={{
-                                    width: 20,
-                                    height: 20,
-                                    borderRadius: '50%',
-                                    flexShrink: 0
-                                  }}
-                                />
-                              )}
-                              <ViewerRoleBadge
-                                role={v.role}
-                                isBot={v.isBot}
-                                badgeSets={badgeSets}
-                                fontScale={textScale}
-                              />
-                              <span
+                              <div
                                 style={{
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  fontWeight: isModOrBroadcastor
-                                    ? 'bold'
-                                    : 'normal',
-                                  fontSize: 12 * textScale
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  width: '100%'
                                 }}
                               >
-                                {v.displayName || v.login}
-                              </span>
+                                {activityDot}
+                                {v.avatarUrl && (
+                                  <img
+                                    src={v.avatarUrl}
+                                    alt={v.login}
+                                    style={{
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: '50%',
+                                      flexShrink: 0
+                                    }}
+                                  />
+                                )}
+                                <ViewerRoleBadge
+                                  role={v.role}
+                                  isBot={v.isBot}
+                                  badges={v.badges}
+                                  badgeSets={badgeSets}
+                                  fontScale={textScale}
+                                />
+                                <span
+                                  style={{
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: isModOrBroadcastor
+                                      ? 'bold'
+                                      : 'normal',
+                                    fontSize: 12 * textScale
+                                  }}
+                                >
+                                  {v.displayName || v.login}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        });
+                      })()}
                     </div>
                   )}
               </div>
@@ -1235,15 +1295,16 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 // =====================================================
-// ViewerRoleBadge — с учётом fontScale
+// ViewerRoleBadge — с учётом fontScale и badges
 // =====================================================
 
 const ViewerRoleBadge: React.FC<{
   role: ViewerRole;
   isBot: boolean;
+  badges?: string[];
   badgeSets: Record<string, Record<string, any>>;
   fontScale: number;
-}> = ({ role, isBot, badgeSets, fontScale }) => {
+}> = ({ role, isBot, badges, badgeSets, fontScale }) => {
   if (isBot) {
     return (
       <span
@@ -1276,7 +1337,31 @@ const ViewerRoleBadge: React.FC<{
     viewer: null
   };
 
-  const setId = roleToSetId[role];
+  // выбираем setId по приоритету из badges, если есть
+  const priority = [
+    'broadcaster',
+    'moderator',
+    'vip',
+    'subscriber',
+    'staff',
+    'admin',
+    'global_mod'
+  ];
+
+  let setId: string | null = null;
+
+  if (badges && badges.length > 0) {
+    for (const p of priority) {
+      if (badges.some((b) => b.toLowerCase().startsWith(p))) {
+        setId = p;
+        break;
+      }
+    }
+  }
+
+  if (!setId) {
+    setId = roleToSetId[role];
+  }
 
   if (
     setId &&
@@ -1296,8 +1381,8 @@ const ViewerRoleBadge: React.FC<{
         return (
           <img
             src={url}
-            alt={role}
-            title={verData.title || role}
+            alt={setId}
+            title={verData.title || setId}
             style={{
               width: 16 * fontScale,
               height: 16 * fontScale,
@@ -1310,24 +1395,25 @@ const ViewerRoleBadge: React.FC<{
     }
   }
 
+  // text fallback
   const mapping: Record<
-    ViewerRole,
-    { label: string; color: string } | null
+    string,
+    { label: string; color: string }
   > = {
     broadcaster: { label: 'S', color: '#a855f7' },
     moderator: { label: 'M', color: '#22c55e' },
     vip: { label: 'V', color: '#ec4899' },
+    subscriber: { label: 'Sub', color: '#f97316' },
     staff: { label: 'T', color: '#f97316' },
     admin: { label: 'T', color: '#f97316' },
-    global_mod: { label: 'T', color: '#f97316' },
-    viewer: null
+    global_mod: { label: 'T', color: '#f97316' }
   };
 
-  const info = mapping[role];
+  const info = setId ? mapping[setId] : null;
   if (info) {
     return (
       <span
-        title={role}
+        title={setId || ''}
         style={{
           minWidth: 14,
           height: 14,
@@ -1346,6 +1432,7 @@ const ViewerRoleBadge: React.FC<{
     );
   }
 
+  // обычный зритель без явных бейджей
   return (
     <span
       style={{
@@ -1362,6 +1449,22 @@ const ViewerRoleBadge: React.FC<{
 // =====================================================
 // Styles
 // =====================================================
+
+const activityDotStyle = (progress: number): React.CSSProperties => {
+  const clamped = Math.min(Math.max(progress, 0), 1);
+  const angle = clamped * 360;
+  return {
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    border: '1px solid #4b5563',
+    background:
+      clamped <= 0
+        ? '#111827'
+        : `conic-gradient(#22c55e ${angle}deg, #111827 ${angle}deg)`,
+    flexShrink: 0
+  };
+};
 
 const sidebarStyle = (collapsed: boolean): React.CSSProperties => ({
   display: 'flex',
@@ -1612,29 +1715,39 @@ async function fetchChattersForChannel(
   const login = channelLogin.toLowerCase().trim();
   if (!login) return { viewers: [], fallback: false };
 
+  let helixViewers: ViewerEntry[] | null = null;
+
+  // 1. Пытаемся получить зрителей через Helix
   try {
     const result =
       await window.electronAPI.twitch.getChannelChatters(login);
-    if (result) {
+
+    if (result && Array.isArray(result.chatters)) {
       const { broadcasterId, moderatorIds, chatters } = result;
       const modsSet = new Set(moderatorIds);
+
       let viewers: ViewerEntry[] = chatters.map((c: any) => {
         let role: ViewerRole = 'viewer';
         if (c.user_id === broadcasterId) role = 'broadcaster';
         else if (modsSet.has(c.user_id)) role = 'moderator';
+
         return {
           odaterId: c.user_id,
           login: c.user_login,
           role,
-          isBot: KNOWN_BOTS.has(c.user_login.toLowerCase())
+          isBot: KNOWN_BOTS.has(c.user_login.toLowerCase()),
+          isFromFallback: false
         };
       });
+
       viewers.sort((a, b) => {
         const aIdx = roleOrder.indexOf(a.role);
         const bIdx = roleOrder.indexOf(b.role);
         if (aIdx !== bIdx) return aIdx - bIdx;
         return a.login.localeCompare(b.login);
       });
+
+      // (опционально) подцепляем avatar/banner
       try {
         const logins = viewers.map((v) => v.login);
         const infos =
@@ -1647,34 +1760,64 @@ async function fetchChattersForChannel(
           return {
             ...v,
             avatarUrl: info?.avatarUrl || null,
-            displayName: info?.displayName || v.login
+            displayName: info?.displayName || v.login,
+            bannerUrl: info?.bannerUrl || null
           };
         });
       } catch {}
-      return { viewers, fallback: false };
+
+      if (viewers.length > 0) {
+        helixViewers = viewers;
+      }
     }
   } catch (err: any) {
     console.warn('[fetchChatters] Helix error:', err);
-    if (fallbackChatters && fallbackChatters.size > 0) {
-      const viewers: ViewerEntry[] = Array.from(
-        fallbackChatters.values()
-      ).map((c: any) => ({
-        login: c.userName,
-        role: c.isBroadcaster
-          ? 'broadcaster'
-          : c.isMod
-          ? 'moderator'
-          : c.isVip
-          ? 'vip'
-          : 'viewer',
-        isBot: KNOWN_BOTS.has(c.userName.toLowerCase()),
-        displayName: c.displayName,
-        avatarUrl: null
-      }));
-      return { viewers, fallback: true };
-    }
-    return { viewers: [], fallback: false };
   }
+
+  if (helixViewers) {
+    return { viewers: helixViewers, fallback: false };
+  }
+
+  // 2. Fallback: activeChatters из App (последние 5 минут)
+  if (fallbackChatters && fallbackChatters.size > 0) {
+    const now = Date.now();
+
+    const viewers: ViewerEntry[] = Array.from(
+      fallbackChatters.values()
+    ).map((c: ActiveChatter) => {
+      let role: ViewerRole = 'viewer';
+      const badgeIds = (c.badges || []).map((b) =>
+        b.toLowerCase()
+      );
+      if (badgeIds.includes('broadcaster')) role = 'broadcaster';
+      else if (badgeIds.includes('moderator')) role = 'moderator';
+      else if (badgeIds.includes('vip')) role = 'vip';
+
+      return {
+        odaterId: c.odaterId,
+        login: c.login,
+        role,
+        isBot: KNOWN_BOTS.has(c.login.toLowerCase()),
+        displayName: c.displayName,
+        avatarUrl: c.avatarUrl ?? null,
+        bannerUrl: c.bannerUrl ?? null,
+        badges: c.badges || [],
+        lastSeen:
+          typeof c.lastSeen === 'number' ? c.lastSeen : now,
+        isFromFallback: true
+      };
+    });
+
+    viewers.sort((a, b) => {
+      const aIdx = roleOrder.indexOf(a.role);
+      const bIdx = roleOrder.indexOf(b.role);
+      if (aIdx !== bIdx) return aIdx - bIdx;
+      return a.login.localeCompare(b.login);
+    });
+
+    return { viewers, fallback: true };
+  }
+
   return { viewers: [], fallback: false };
 }
 
