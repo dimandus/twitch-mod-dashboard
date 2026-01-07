@@ -70,8 +70,8 @@ interface SidebarProps {
   onRemoveChannelFromApp: (channel: string) => void;
   onOpenChatForChannel: (channel: string) => void;
   onOpenUserLog: (userLogin: string) => void;
-  activeChatters: Record<string, Map<string, ActiveChatter>>;
   onOpenUserProfile: (userLogin: string) => void;
+  activeChatters: Record<string, Map<string, ActiveChatter>>;
 }
 
 // =====================================================
@@ -101,7 +101,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [addChannelError, setAddChannelError] = useState<string | null>(null);
 
   const [modChannelsLoading, setModChannelsLoading] = useState(false);
-  const [followedChannelsLoading, setFollowedChannelsLoading] = useState(false);
+  const [followedChannelsLoading, setFollowedChannelsLoading] =
+    useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
   const [channelContextMenu, setChannelContextMenu] = useState<{
@@ -123,41 +124,39 @@ const Sidebar: React.FC<SidebarProps> = ({
   >({});
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
+  const [channelFilter, setChannelFilter] =
+    useState<ChannelFilter>('all');
   const [moderatedLogins, setModeratedLogins] = useState<string[]>([]);
+
+  const [badgeSets, setBadgeSets] = useState<
+    Record<string, Record<string, any>>
+  >({});
 
   const lastLiveRef = useRef<Record<string, boolean>>({});
 
-  const addToast = (text: string, type: Toast['type'] = 'info') => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // Toast
+  const addToast = (
+    text: string,
+    type: Toast['type'] = 'info'
+  ) => {
+    const id = `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
     setToasts((prev) => [...prev, { id, text, type }]);
     setTimeout(
-      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
+      () =>
+        setToasts((prev) => prev.filter((t) => t.id !== id)),
       5000
     );
   };
-
-// =====================================================
-  // ДИАГНОСТИКА: Проверяем что activeChatters доходит
-  // =====================================================
-  useEffect(() => {
-    console.log('[Sidebar] activeChatters prop изменился:', {
-      keys: Object.keys(activeChatters),
-      sizes: Object.fromEntries(
-        Object.entries(activeChatters).map(([k, v]) => [k, v.size])
-      )
-    });
-  }, [activeChatters]);
-
-  useEffect(() => {
-    console.log('[Sidebar] selectedChannel:', selectedChannel);
-  }, [selectedChannel]);
 
   // Загрузка сохранённых каналов
   useEffect(() => {
     (async () => {
       try {
-        const stored = await window.electronAPI.config.get('settings.channels');
+        const stored = await window.electronAPI.config.get(
+          'settings.channels'
+        );
         if (Array.isArray(stored)) setChannels(stored);
       } catch (err) {
         console.error(err);
@@ -165,11 +164,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     })();
   }, []);
 
-  // Подгружаем список каналов, где мы модератор (для фильтра)
+  // Загрузка списка мод-каналов (для фильтра "Где я мод")
   useEffect(() => {
     (async () => {
       try {
-        const list = await window.electronAPI.twitch.getModeratedChannels();
+        const list =
+          await window.electronAPI.twitch.getModeratedChannels();
         if (!list) return;
         const logins = list.map(
           (ch: any) => ch.broadcaster_login.toLowerCase()
@@ -184,14 +184,42 @@ const Sidebar: React.FC<SidebarProps> = ({
     })();
   }, []);
 
+  // Загрузка глобальных бейджей через Helix
+  useEffect(() => {
+    (async () => {
+      try {
+        const json =
+          await window.electronAPI.twitch.getGlobalBadges();
+        const sets: Record<string, Record<string, any>> = {};
+        for (const set of json.data || []) {
+          const vers: Record<string, any> = {};
+          for (const v of set.versions || []) {
+            vers[v.id] = v;
+          }
+          sets[set.set_id] = vers;
+        }
+        setBadgeSets(sets);
+      } catch (err) {
+        console.warn(
+          '[Sidebar Badges] не удалось загрузить глобальные бейджи',
+          err
+        );
+      }
+    })();
+  }, []);
+
   // Закрытие контекстных меню
   useEffect(() => {
     const close = () => {
       setChannelContextMenu((prev) =>
-        prev.visible ? { ...prev, visible: false, channelLogin: null } : prev
+        prev.visible
+          ? { ...prev, visible: false, channelLogin: null }
+          : prev
       );
       setViewerContextMenu((prev) =>
-        prev.visible ? { ...prev, visible: false, viewer: null } : prev
+        prev.visible
+          ? { ...prev, visible: false, viewer: null }
+          : prev
       );
     };
     window.addEventListener('click', close);
@@ -203,39 +231,32 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   // Автообновление зрителей
-  // СТАЛО (правильно):
-// Автообновление зрителей
-useEffect(() => {
-  if (!selectedChannel) return;
-  
-  let cancelled = false;
-  
-  const refresh = async () => {
-    if (cancelled) return;
-    try {
-      const { viewers: list, fallback } = await fetchChattersForChannel(
-        selectedChannel,
-        activeChatters[selectedChannel.toLowerCase()]
-      );
-      if (!cancelled) {
-        setViewers(list);
-        setViewersError(null);
-        setUsingFallback(fallback);
+  useEffect(() => {
+    if (!selectedChannel) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const { viewers: list, fallback } =
+          await fetchChattersForChannel(
+            selectedChannel,
+            activeChatters[selectedChannel.toLowerCase()]
+          );
+        if (!cancelled) {
+          setViewers(list);
+          setViewersError(null);
+          setUsingFallback(fallback);
+        }
+      } catch (err: any) {
+        if (!cancelled)
+          setViewersError(err?.message || 'Ошибка');
       }
-    } catch (err: any) {
-      if (!cancelled) setViewersError(err?.message || 'Ошибка');
-    }
-  };
-  
-  refresh();  // ← ЭТА СТРОКА ВАЖНА!
-  
-  const intervalId = setInterval(refresh, 3000);
-  
-  return () => {
-    cancelled = true;
-    clearInterval(intervalId);
-  };
-}, [selectedChannel, activeChatters]);
+    };
+    const intervalId = setInterval(refresh, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [selectedChannel, activeChatters]);
 
   // Опрос статуса каналов
   useEffect(() => {
@@ -248,7 +269,9 @@ useEffect(() => {
     const poll = async () => {
       try {
         const statuses =
-          await window.electronAPI.twitch.getChannelsLiveStatus(channels);
+          await window.electronAPI.twitch.getChannelsLiveStatus(
+            channels
+          );
         if (cancelled || !statuses) return;
         setChannelStatus(() => {
           const next: Record<string, ChannelStatus> = {};
@@ -262,7 +285,9 @@ useEffect(() => {
             newLast[key] = now;
             if (was !== undefined && was !== now) {
               addToast(
-                `${st.login} ${now ? '🟢 онлайн' : '🔴 оффлайн'}`,
+                `${st.login} ${
+                  now ? '🟢 онлайн' : '🔴 оффлайн'
+                }`,
                 now ? 'success' : 'info'
               );
             }
@@ -291,10 +316,11 @@ useEffect(() => {
     setViewersLoading(true);
     setUsingFallback(false);
     try {
-      const { viewers: list, fallback } = await fetchChattersForChannel(
-        channelLogin,
-        activeChatters[channelLogin.toLowerCase()]
-      );
+      const { viewers: list, fallback } =
+        await fetchChattersForChannel(
+          channelLogin,
+          activeChatters[channelLogin.toLowerCase()]
+        );
       setViewers(list);
       setUsingFallback(fallback);
     } catch (err: any) {
@@ -304,13 +330,12 @@ useEffect(() => {
     }
   };
 
-  // Открыть модалку добавления канала
+  // Добавление канала
   const openAddChannel = () => {
     setNewChannelName('');
     setAddChannelError(null);
     setIsAddChannelOpen(true);
   };
-
   const handleAddChannel = async () => {
     const raw = newChannelName.trim().toLowerCase();
     if (!raw) {
@@ -331,11 +356,13 @@ useEffect(() => {
     void handleSelectChannel(raw);
   };
 
+  // Импорт мод-каналов
   const handleImportModeratedChannels = async () => {
     setModChannelsLoading(true);
     setImportError(null);
     try {
-      const list = await window.electronAPI.twitch.getModeratedChannels();
+      const list =
+        await window.electronAPI.twitch.getModeratedChannels();
       if (!list || list.length === 0) {
         setImportError('Нет каналов');
         return;
@@ -344,7 +371,6 @@ useEffect(() => {
         ch.broadcaster_login.toLowerCase()
       );
       const added = mergeChannels(newLogins);
-      // обновим список мод-каналов для фильтра
       setModeratedLogins((prev) =>
         Array.from(new Set([...prev, ...newLogins]))
       );
@@ -357,11 +383,13 @@ useEffect(() => {
     }
   };
 
+  // Импорт подписок
   const handleImportFollowedChannels = async () => {
     setFollowedChannelsLoading(true);
     setImportError(null);
     try {
-      const list = await window.electronAPI.twitch.getFollowedChannels();
+      const list =
+        await window.electronAPI.twitch.getFollowedChannels();
       if (!list || list.length === 0) {
         setImportError('Нет подписок');
         return;
@@ -397,7 +425,7 @@ useEffect(() => {
     return toAdd.length;
   };
 
-  // Удаление одного канала (общая логика)
+  // Удаление одного канала
   const removeChannel = async (login: string) => {
     const lower = login.toLowerCase();
     const updated = channels.filter(
@@ -421,7 +449,7 @@ useEffect(() => {
   // Очистить весь список каналов
   const handleClearAllChannels = async () => {
     if (channels.length === 0) return;
-    const prev = [...channels];
+    const prevList = [...channels];
     setChannels([]);
     try {
       await window.electronAPI.config.set('settings.channels', []);
@@ -432,7 +460,7 @@ useEffect(() => {
       setViewersError(null);
       onChannelSelected(null);
     }
-    prev.forEach((login) => onRemoveChannelFromApp(login));
+    prevList.forEach((login) => onRemoveChannelFromApp(login));
   };
 
   const handleChannelContextMenu = (
@@ -527,8 +555,10 @@ useEffect(() => {
     });
   };
 
-  // Фильтрация каналов по "Все" / "Где я модератор"
-  const moderatedSet = new Set(moderatedLogins.map((l) => l.toLowerCase()));
+  // Фильтрация каналов
+  const moderatedSet = new Set(
+    moderatedLogins.map((l) => l.toLowerCase())
+  );
 
   const filteredChannels =
     channelFilter === 'all'
@@ -560,7 +590,10 @@ useEffect(() => {
               Навигация
             </span>
           )}
-          <button onClick={onToggleCollapse} style={collapseButtonStyle}>
+          <button
+            onClick={onToggleCollapse}
+            style={collapseButtonStyle}
+          >
             {collapsed ? '▶' : '◀'}
           </button>
         </div>
@@ -579,7 +612,10 @@ useEffect(() => {
               <div style={sectionHeaderStyle}>
                 <span>
                   Каналы ({filteredChannels.length}
-                  {channelFilter === 'mod' ? ` / ${channels.length}` : ''})
+                  {channelFilter === 'mod'
+                    ? ` / ${channels.length}`
+                    : ''}
+                  )
                 </span>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button
@@ -626,7 +662,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* Фильтры "Все / Мод" */}
+              {/* Фильтры каналов */}
               <div
                 style={{
                   padding: '2px 8px 4px',
@@ -635,13 +671,17 @@ useEffect(() => {
                 }}
               >
                 <button
-                  style={channelFilterButtonStyle(channelFilter === 'all')}
+                  style={channelFilterButtonStyle(
+                    channelFilter === 'all'
+                  )}
                   onClick={() => setChannelFilter('all')}
                 >
                   Все
                 </button>
                 <button
-                  style={channelFilterButtonStyle(channelFilter === 'mod')}
+                  style={channelFilterButtonStyle(
+                    channelFilter === 'mod'
+                  )}
                   onClick={() => setChannelFilter('mod')}
                 >
                   Где я мод
@@ -663,7 +703,8 @@ useEffect(() => {
 
                 {sortedChannels.map((ch) => {
                   const st =
-                    channelStatus[ch.toLowerCase()] || ({} as ChannelStatus);
+                    channelStatus[ch.toLowerCase()] ||
+                    ({} as ChannelStatus);
                   const dotColor =
                     st.isLive === undefined
                       ? '#4b5563'
@@ -673,17 +714,26 @@ useEffect(() => {
                   return (
                     <button
                       key={ch}
-                      style={channelButtonStyle(selectedChannel === ch)}
+                      style={channelButtonStyle(
+                        selectedChannel === ch
+                      )}
                       onClick={() => handleSelectChannel(ch)}
-                      onContextMenu={(e) => handleChannelContextMenu(e, ch)}
+                      onContextMenu={(e) =>
+                        handleChannelContextMenu(e, ch)
+                      }
                       onDragStart={(e) => {
-                        e.dataTransfer.setData('text/channel-login', ch);
+                        e.dataTransfer.setData(
+                          'text/channel-login',
+                          ch
+                        );
                         e.dataTransfer.effectAllowed = 'copy';
                       }}
                       draggable
                       title={
                         st.isLive
-                          ? `${ch} онлайн: ${st.title || ''}`
+                          ? `${ch} онлайн: ${
+                              st.title || ''
+                            }`
                           : `${ch} оффлайн`
                       }
                     >
@@ -720,9 +770,9 @@ useEffect(() => {
                             flexShrink: 0
                           }}
                         >
-                          ({st.viewerCount ?? 0}/{st.modCount ?? '?'})
+                          ({st.viewerCount ?? 0}/
+                          {st.modCount ?? '?'})
                         </span>
-                        {/* Кнопка удаления канала из списка */}
                         <span
                           style={channelRemoveButtonStyle}
                           title="Удалить канал из списка"
@@ -781,21 +831,29 @@ useEffect(() => {
               </div>
               <div style={scrollListStyle}>
                 {!selectedChannel && (
-                  <div style={{ color: '#6b7280' }}>Выбери канал</div>
+                  <div style={{ color: '#6b7280' }}>
+                    Выбери канал
+                  </div>
                 )}
                 {selectedChannel && viewersLoading && (
-                  <div style={{ color: '#6b7280' }}>Загрузка...</div>
+                  <div style={{ color: '#6b7280' }}>
+                    Загрузка...
+                  </div>
                 )}
                 {selectedChannel &&
                   viewersError &&
                   !viewersLoading && (
-                    <div style={{ color: '#fca5a5' }}>{viewersError}</div>
+                    <div style={{ color: '#fca5a5' }}>
+                      {viewersError}
+                    </div>
                   )}
                 {selectedChannel &&
                   !viewersLoading &&
                   !viewersError &&
                   viewers.length === 0 && (
-                    <div style={{ color: '#6b7280' }}>Зрителей нет</div>
+                    <div style={{ color: '#6b7280' }}>
+                      Зрителей нет
+                    </div>
                   )}
                 {selectedChannel &&
                   !viewersLoading &&
@@ -803,13 +861,15 @@ useEffect(() => {
                   viewers.length > 0 && (
                     <div>
                       {viewers.map((v) => {
-                        const isModOrBroadcaster =
+                        const isModOrBroadcastor =
                           v.role === 'broadcaster' ||
                           v.role === 'moderator';
-                        const bgStyle = isModOrBroadcaster
+                        const bgStyle = isModOrBroadcastor
                           ? {
-                              background: 'rgba(255,255,255,0.05)',
-                              borderLeft: '3px solid #9147ff'
+                              background:
+                                'rgba(255,255,255,0.05)',
+                              borderLeft:
+                                '3px solid #9147ff'
                             }
                           : {};
                         return (
@@ -847,13 +907,14 @@ useEffect(() => {
                               <ViewerRoleBadge
                                 role={v.role}
                                 isBot={v.isBot}
+                                badgeSets={badgeSets}
                               />
                               <span
                                 style={{
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                   whiteSpace: 'nowrap',
-                                  fontWeight: isModOrBroadcaster
+                                  fontWeight: isModOrBroadcastor
                                     ? 'bold'
                                     : 'normal'
                                 }}
@@ -894,7 +955,9 @@ useEffect(() => {
             <input
               type="text"
               value={newChannelName}
-              onChange={(e) => setNewChannelName(e.target.value)}
+              onChange={(e) =>
+                setNewChannelName(e.target.value)
+              }
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleAddChannel();
               }}
@@ -939,98 +1002,106 @@ useEffect(() => {
       )}
 
       {/* Контекстное меню каналов */}
-      {channelContextMenu.visible && channelContextMenu.channelLogin && (
-        <div
-          style={contextMenuStyle(
-            channelContextMenu.x,
-            channelContextMenu.y
-          )}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={handleOpenChatFromContextMenu}
-            style={menuItemStyle}
+      {channelContextMenu.visible &&
+        channelContextMenu.channelLogin && (
+          <div
+            style={contextMenuStyle(
+              channelContextMenu.x,
+              channelContextMenu.y
+            )}
+            onClick={(e) => e.stopPropagation()}
           >
-            💬 Открыть чат
-          </button>
-          <button
-            onClick={handleRemoveChannelFromContextMenu}
-            style={{ ...menuItemStyle, color: '#fecaca' }}
-          >
-            🗑️ Удалить
-          </button>
-        </div>
-      )}
+            <button
+              onClick={handleOpenChatFromContextMenu}
+              style={menuItemStyle}
+            >
+              💬 Открыть чат
+            </button>
+            <button
+              onClick={handleRemoveChannelFromContextMenu}
+              style={{ ...menuItemStyle, color: '#fecaca' }}
+            >
+              🗑️ Удалить
+            </button>
+          </div>
+        )}
 
       {/* Контекстное меню зрителя */}
-      {viewerContextMenu.visible && viewerContextMenu.viewer && (
-  <div
-    style={contextMenuStyle(
-      viewerContextMenu.x,
-      viewerContextMenu.y
-    )}
-    onClick={(e) => e.stopPropagation()}
-  >
-    <div style={contextMenuHeaderStyle}>
-      {viewerContextMenu.viewer.displayName ||
-        viewerContextMenu.viewer.login}
-    </div>
-    <button
-      onClick={() => {
-        onOpenUserProfile(viewerContextMenu.viewer!.login);
-        setViewerContextMenu({
-          visible: false,
-          x: 0,
-          y: 0,
-          viewer: null
-        });
-      }}
-      style={menuItemStyle}
-    >
-      👤 Профиль
-    </button>
-    <button
-      onClick={() => {
-        onOpenUserLog(viewerContextMenu.viewer!.login);
-        setViewerContextMenu({
-          visible: false,
-          x: 0,
-          y: 0,
-          viewer: null
-        });
-      }}
-      style={menuItemStyle}
-    >
-            📜 Лог сообщений
-          </button>
-          <div style={menuDividerStyle} />
-          <button
-            onClick={() => handleViewerModeration('timeout', 60)}
-            style={menuItemStyle}
+      {viewerContextMenu.visible &&
+        viewerContextMenu.viewer && (
+          <div
+            style={contextMenuStyle(
+              viewerContextMenu.x,
+              viewerContextMenu.y
+            )}
+            onClick={(e) => e.stopPropagation()}
           >
-            ⏱️ Таймаут 1м
-          </button>
-          <button
-            onClick={() => handleViewerModeration('timeout', 600)}
-            style={menuItemStyle}
-          >
-            ⏱️ Таймаут 10м
-          </button>
-          <div style={menuDividerStyle} />
-          <button
-            onClick={() => handleViewerModeration('ban')}
-            style={{ ...menuItemStyle, color: '#fca5a5' }}
-          >
-            ⛔ Бан
-          </button>
-          <button
-            onClick={() => handleViewerModeration('unban')}
-            style={{ ...menuItemStyle, color: '#86efac' }}
-          >
-            ✅ Разбан
-          </button>
-        </div>
-      )}
+            <div style={contextMenuHeaderStyle}>
+              {viewerContextMenu.viewer.displayName ||
+                viewerContextMenu.viewer.login}
+            </div>
+            <button
+              onClick={() => {
+                onOpenUserProfile(
+                  viewerContextMenu.viewer!.login
+                );
+                setViewerContextMenu({
+                  visible: false,
+                  x: 0,
+                  y: 0,
+                  viewer: null
+                });
+              }}
+              style={menuItemStyle}
+            >
+              👤 Профиль
+            </button>
+            <button
+              onClick={() => {
+                onOpenUserLog(viewerContextMenu.viewer!.login);
+                setViewerContextMenu({
+                  visible: false,
+                  x: 0,
+                  y: 0,
+                  viewer: null
+                });
+              }}
+              style={menuItemStyle}
+            >
+              📜 Лог сообщений
+            </button>
+            <div style={menuDividerStyle} />
+            <button
+              onClick={() =>
+                handleViewerModeration('timeout', 60)
+              }
+              style={menuItemStyle}
+            >
+              ⏱️ Таймаут 1м
+            </button>
+            <button
+              onClick={() =>
+                handleViewerModeration('timeout', 600)
+              }
+              style={menuItemStyle}
+            >
+              ⏱️ Таймаут 10м
+            </button>
+            <div style={menuDividerStyle} />
+            <button
+              onClick={() => handleViewerModeration('ban')}
+              style={{ ...menuItemStyle, color: '#fca5a5' }}
+            >
+              ⛔ Бан
+            </button>
+            <button
+              onClick={() => handleViewerModeration('unban')}
+              style={{ ...menuItemStyle, color: '#86efac' }}
+            >
+              ✅ Разбан
+            </button>
+          </div>
+        )}
 
       {/* Тосты */}
       {toasts.length > 0 && (
@@ -1058,56 +1129,119 @@ useEffect(() => {
 };
 
 // =====================================================
-// ViewerRoleBadge
+// ViewerRoleBadge — теперь с реальными иконками, если есть badgeSets
 // =====================================================
 
-const ViewerRoleBadge: React.FC<{ role: ViewerRole; isBot: boolean }> = ({
-  role,
-  isBot
-}) => {
-  const badges: { label: string; color: string }[] = [];
-
-  if (role === 'broadcaster')
-    badges.push({ label: 'S', color: '#a855f7' });
-  if (role === 'moderator' || role === 'broadcaster')
-    badges.push({ label: 'M', color: '#22c55e' });
-  if (role === 'vip') badges.push({ label: 'V', color: '#ec4899' });
-  if (['staff', 'admin', 'global_mod'].includes(role))
-    badges.push({ label: 'T', color: '#f97316' });
-
-  if (isBot) badges.push({ label: 'B', color: '#eab308' });
-
-  if (badges.length > 0) {
-    const uniqueBadges = badges.filter(
-      (b, i, self) =>
-        i === self.findIndex((t) => t.label === b.label)
-    );
-
+const ViewerRoleBadge: React.FC<{
+  role: ViewerRole;
+  isBot: boolean;
+  badgeSets: Record<string, Record<string, any>>;
+}> = ({ role, isBot, badgeSets }) => {
+  // Боты: отдельный бейдж
+  if (isBot) {
     return (
-      <span style={{ display: 'flex', gap: 2 }}>
-        {uniqueBadges.map((b, i) => (
-          <span
-            key={b.label + i}
-            style={{
-              minWidth: 14,
-              height: 14,
-              borderRadius: 4,
-              fontSize: 9,
-              lineHeight: '14px',
-              textAlign: 'center',
-              background: b.color,
-              color: '#020617',
-              fontWeight: 700,
-              padding: '0 2px'
-            }}
-          >
-            {b.label}
-          </span>
-        ))}
+      <span
+        title="Bot"
+        style={{
+          minWidth: 14,
+          height: 14,
+          borderRadius: 4,
+          fontSize: 9,
+          lineHeight: '14px',
+          textAlign: 'center',
+          background: '#eab308',
+          color: '#020617',
+          fontWeight: 700,
+          padding: '0 2px'
+        }}
+      >
+        B
       </span>
     );
   }
 
+  const roleToSetId: Record<ViewerRole, string | null> = {
+    broadcaster: 'broadcaster',
+    moderator: 'moderator',
+    vip: 'vip',
+    staff: 'staff',
+    admin: 'admin',
+    global_mod: 'global_mod',
+    viewer: null
+  };
+
+  const setId = roleToSetId[role];
+
+  if (
+    setId &&
+    badgeSets &&
+    Object.keys(badgeSets).length > 0 &&
+    badgeSets[setId]
+  ) {
+    const versions = badgeSets[setId];
+    const verData =
+      versions['1'] || (Object.values(versions)[0] as any);
+    if (verData) {
+      const url =
+        verData.image_url_1x ||
+        verData.image_url_2x ||
+        verData.image_url_4x;
+      if (url) {
+        return (
+          <img
+            src={url}
+            alt={role}
+            title={verData.title || role}
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: 4,
+              flexShrink: 0
+            }}
+          />
+        );
+      }
+    }
+  }
+
+  // Fallback: цветные бейджи, как раньше
+  const mapping: Record<
+    ViewerRole,
+    { label: string; color: string } | null
+  > = {
+    broadcaster: { label: 'S', color: '#a855f7' },
+    moderator: { label: 'M', color: '#22c55e' },
+    vip: { label: 'V', color: '#ec4899' },
+    staff: { label: 'T', color: '#f97316' },
+    admin: { label: 'T', color: '#f97316' },
+    global_mod: { label: 'T', color: '#f97316' },
+    viewer: null
+  };
+
+  const info = mapping[role];
+  if (info) {
+    return (
+      <span
+        title={role}
+        style={{
+          minWidth: 14,
+          height: 14,
+          borderRadius: 4,
+          fontSize: 9,
+          lineHeight: '14px',
+          textAlign: 'center',
+          background: info.color,
+          color: '#020617',
+          fontWeight: 700,
+          padding: '0 2px'
+        }}
+      >
+        {info.label}
+      </span>
+    );
+  }
+
+  // Обычный зритель без роли
   return (
     <span
       style={{
@@ -1375,9 +1509,8 @@ async function fetchChattersForChannel(
   if (!login) return { viewers: [], fallback: false };
 
   try {
-    const result = await window.electronAPI.twitch.getChannelChatters(
-      login
-    );
+    const result =
+      await window.electronAPI.twitch.getChannelChatters(login);
     if (result) {
       const { broadcasterId, moderatorIds, chatters } = result;
       const modsSet = new Set(moderatorIds);
@@ -1392,15 +1525,18 @@ async function fetchChattersForChannel(
           isBot: KNOWN_BOTS.has(c.user_login.toLowerCase())
         };
       });
+      // Сортировка
       viewers.sort((a, b) => {
         const aIdx = roleOrder.indexOf(a.role);
         const bIdx = roleOrder.indexOf(b.role);
         if (aIdx !== bIdx) return aIdx - bIdx;
         return a.login.localeCompare(b.login);
       });
+      // Аватарки
       try {
         const logins = viewers.map((v) => v.login);
-        const infos = await window.electronAPI.twitch.getUsersInfo(logins);
+        const infos =
+          await window.electronAPI.twitch.getUsersInfo(logins);
         const infoMap = new Map(
           infos.map((i: any) => [i.login.toLowerCase(), i])
         );
@@ -1417,6 +1553,7 @@ async function fetchChattersForChannel(
     }
   } catch (err: any) {
     console.warn('[fetchChatters] Helix error:', err);
+    // Fallback logic
     if (fallbackChatters && fallbackChatters.size > 0) {
       const viewers: ViewerEntry[] = Array.from(
         fallbackChatters.values()

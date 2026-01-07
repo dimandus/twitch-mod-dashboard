@@ -94,25 +94,24 @@ export class TwitchChatClient {
     });
 
     client.on('message', (chan, tags, msg, self) => {
-      const loginChan = normalizeChannel(chan);
+  const loginChan = normalizeChannel(chan);
 
-      console.log('[TMI raw message]', {
-        self,
-        id: tags.id,
-        messageType: tags['message-type'],
-        username: tags.username,
-        msgPreview: msg.substring(0, 30),
-        allTagKeys: Object.keys(tags).join(', ')
-      });
+  console.log('[TMI message]', {
+    rawChannel: chan,
+    channel: loginChan,
+    self,
+    msg,
+    tags
+  });
 
-      if (self && !tags.username) {
-        tags.username = this.currentUsername;
-      }
+  if (self && !tags.username) {
+    tags.username = this.currentUsername;
+  }
 
-      for (const h of this.messageHandlers) {
-        h({ channel: loginChan, message: msg, tags, self });
-      }
-    });
+  for (const h of this.messageHandlers) {
+    h({ channel: loginChan, message: msg, tags, self });
+  }
+});
 
     // Удаление конкретного сообщения (CLEARMSG)
     client.on('clearmsg', (chan, tags) => {

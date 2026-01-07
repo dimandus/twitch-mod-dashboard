@@ -114,6 +114,8 @@ interface TwitchAPI {
   getChannelsLiveStatus: (logins: string[]) => Promise<ChannelLiveStatus[]>;
   getUsersInfo: (logins: string[]) => Promise<UserBasicInfo[]>;
   getFollowedChannels: () => Promise<FollowedChannel[]>;
+    getGlobalBadges: () => Promise<any>;
+  getChannelBadges?: (broadcasterId: string) => Promise<any>;
   // =====================================================
   // МОДЕРАЦИЯ (НОВОЕ)
   // =====================================================

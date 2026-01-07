@@ -26,7 +26,11 @@ getUserDetails: (login) =>
       ipcRenderer.invoke('twitch:getChannelsLiveStatus', logins),
     getUsersInfo: (logins) =>
       ipcRenderer.invoke('twitch:getUsersInfo', logins),
-
+getGlobalBadges: () =>
+  ipcRenderer.invoke('twitch:getGlobalBadges'),
+// при необходимости:
+getChannelBadges: (broadcasterId) =>
+  ipcRenderer.invoke('twitch:getChannelBadges', broadcasterId),
     // ОТПРАВКА СООБЩЕНИЯ ЧЕРЕЗ HELIX
     sendChatMessage: (channel, text) =>
       ipcRenderer.invoke('twitch:sendChatMessage', channel, text),

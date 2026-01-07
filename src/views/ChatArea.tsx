@@ -5,21 +5,24 @@ import React, { useEffect, useRef, useState } from 'react';
 // =====================================================
 
 export interface ChatMessage {
-  id: string;                // Локальный UI ID
-  msgId?: string;            // Реальный Twitch message ID (для delete)
+  id: string; // Локальный UI ID
+  msgId?: string; // Реальный Twitch message ID (для delete)
   userId?: string;
   text: string;
   userLogin: string;
   displayName: string;
   color?: string;
   badges: string[];
+  badgeInfo?: Record<string, string>; // badge-info (напр. subscriber: "11")
+  badgeVersions?: Record<string, string>; // badges (setId -> version, напр. subscriber: "0")
   self: boolean;
   timestamp: number;
   emotes?: Record<string, string[]>;
+  mentionedSelf?: boolean;
   deleted?: boolean;
   isSystem?: boolean;
   canDelete?: boolean;
-  cleared?: boolean;         // Сообщение «очищено» (clear chat), но не удалено
+  cleared?: boolean; // Сообщение «очищено» (clear chat), но не удалено
 }
 
 export interface ChatPane {
@@ -132,9 +135,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [paneWidth, setPaneWidth] = useState(320);
   const [paneHeight, setPaneHeight] = useState(260);
 
-  const [layoutLoaded, setLayoutLoaded] = useState(false);
+  const [layoutLoaded, setLayoutLoaded] = useState(false); // если не нужен - можно удалить
 
   const scrollContainersRef = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const [mentionState, setMentionState] = useState<{
+    paneId: string;
+    query: string;
+    suggestions: string[];
+    selectedIndex: number;
+    atIndex: number; // позиция '@' в строке
+  } | null>(null);
 
   const [msgMenu, setMsgMenu] = useState<{
     x: number;
@@ -148,40 +159,30 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     type: 'slow' | 'followers';
   } | null>(null);
 
-  // Layout persistence
+  const [badgeSets, setBadgeSets] = useState<Record<string, Record<string, any>>>({});
+
+  // Загрузка глобальных бейджей через Helix
   useEffect(() => {
     (async () => {
       try {
-        const stored = await window.electronAPI.config.get('settings.chatLayout');
-        if (stored && typeof stored === 'object') {
-          const r = stored.rows === 2 ? 2 : 1;
-          const w =
-            typeof stored.paneWidth === 'number'
-              ? clampWidth(stored.paneWidth)
-              : 320;
-          const h =
-            typeof stored.paneHeight === 'number'
-              ? clampHeight(stored.paneHeight)
-              : 260;
-          setRows(r);
-          setPaneWidth(w);
-          setPaneHeight(h);
+        const json = await window.electronAPI.twitch.getGlobalBadges();
+        // json: { data: [ { set_id, versions: [...] }, ... ] }
+
+        const sets: Record<string, Record<string, any>> = {};
+        for (const set of json.data || []) {
+          const setId = set.set_id;
+          const vers: Record<string, any> = {};
+          for (const v of set.versions || []) {
+            vers[v.id] = v; // v: { id, image_url_1x, image_url_2x, ... }
+          }
+          sets[setId] = vers;
         }
+        setBadgeSets(sets);
       } catch (err) {
-        console.error(err);
-      } finally {
-        setLayoutLoaded(true);
+        console.warn('[Badges] не удалось загрузить глобальные бейджи', err);
       }
     })();
   }, []);
-
-  useEffect(() => {
-    if (!layoutLoaded) return;
-    const layout = { rows, paneWidth, paneHeight };
-    window.electronAPI.config
-      .set('settings.chatLayout', layout)
-      .catch(console.error);
-  }, [rows, paneWidth, paneHeight, layoutLoaded]);
 
   useEffect(() => {
     const handleClick = () => {
@@ -192,27 +193,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     return () => window.removeEventListener('click', handleClick);
   }, []);
 
-  const changePaneWidth = (delta: number) =>
-    setPaneWidth((w) => clampWidth(w + delta));
-  const changePaneHeight = (delta: number) =>
-    setPaneHeight((h) => clampHeight(h + delta));
+  const changePaneWidth = (delta: number) => setPaneWidth((w) => clampWidth(w + delta));
+  const changePaneHeight = (delta: number) => setPaneHeight((h) => clampHeight(h + delta));
 
   // Drag & Drop
-  const handleContainerDragOver: React.DragEventHandler<HTMLDivElement> = (
-    e
-  ) => {
+  const handleContainerDragOver: React.DragEventHandler<HTMLDivElement> = (e) => {
     const types = e.dataTransfer.types;
     if (!Array.from(types).includes('text/channel-login')) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     setIsDropActive(true);
   };
-  const handleContainerDragLeave: React.DragEventHandler<HTMLDivElement> = (
-    e
-  ) => {
+
+  const handleContainerDragLeave: React.DragEventHandler<HTMLDivElement> = (e) => {
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setIsDropActive(false);
   };
+
   const handleContainerDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
     if (!Array.from(e.dataTransfer.types).includes('text/channel-login')) return;
     e.preventDefault();
@@ -220,14 +217,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     const channel = e.dataTransfer.getData('text/channel-login');
     if (channel) onAddChat(channel);
   };
+
   const handlePaneDragStart = (e: React.DragEvent<HTMLDivElement>, paneId: string) => {
     setDraggingId(paneId);
     e.dataTransfer.effectAllowed = 'move';
   };
+
   const handlePaneDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
+
   const handlePaneDrop = (e: React.DragEvent<HTMLDivElement>, targetId: string) => {
     e.preventDefault();
     if (!draggingId || draggingId === targetId) return;
@@ -240,16 +240,142 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     onReorderChats(next);
     setDraggingId(null);
   };
+
   const handlePaneDragEnd = () => setDraggingId(null);
 
   // Input
-  const handleInputChange = (id: string, value: string) =>
+  const handleInputChange = (id: string, value: string) => {
     setInputValues((p) => ({ ...p, [id]: value }));
+    updateMentionSuggestions(id, value);
+  };
+
   const handleSend = (pane: ChatPane) => {
     const text = (inputValues[pane.id] || '').trim();
     if (!pane.channel || !text) return;
     onSendMessage(pane.channel, text);
     setInputValues((p) => ({ ...p, [pane.id]: '' }));
+    setMentionState((prev) => (prev?.paneId === pane.id ? null : prev));
+  };
+
+  const updateMentionSuggestions = (paneId: string, value: string) => {
+    const atIndex = value.lastIndexOf('@');
+    if (atIndex === -1) {
+      setMentionState(null);
+      return;
+    }
+
+    // Проверяем, что '@' в начале слова
+    if (atIndex > 0 && !/\s/.test(value[atIndex - 1])) {
+      setMentionState(null);
+      return;
+    }
+
+    const after = value.slice(atIndex + 1);
+    // Если после @ уже есть пробел — упоминание завершилось
+    if (after.includes(' ')) {
+      setMentionState(null);
+      return;
+    }
+
+    const query = after.toLowerCase();
+    const pane = chatPanes.find((p) => p.id === paneId);
+    if (!pane) {
+      setMentionState(null);
+      return;
+    }
+
+    const namesSet = new Set<string>();
+    pane.messages.forEach((m) => {
+      if (!m.userLogin) return;
+      const name = m.displayName || m.userLogin;
+      namesSet.add(name);
+    });
+
+    const allNames = Array.from(namesSet);
+    const suggestions = allNames
+      .filter((name) => name.toLowerCase().startsWith(query))
+      .sort();
+
+    if (suggestions.length === 0) {
+      setMentionState(null);
+      return;
+    }
+
+    setMentionState({
+      paneId,
+      query,
+      suggestions,
+      selectedIndex: 0,
+      atIndex
+    });
+  };
+
+  const applyMentionSuggestion = (paneId: string) => {
+    setMentionState((prev) => {
+      if (!prev || prev.paneId !== paneId) return prev;
+      const { atIndex, suggestions, selectedIndex } = prev;
+      const name = suggestions[selectedIndex];
+      const current = inputValues[paneId] || '';
+
+      const before = current.slice(0, atIndex);
+      // мы знаем, что после @ нет пробелов (updateMentionSuggestions так фильтрует),
+      // поэтому просто отрезаем всё после @ и вставляем полный ник
+      const newValue = before + '@' + name + ' ';
+
+      setInputValues((p) => ({ ...p, [paneId]: newValue }));
+
+      // Закрываем подсказку
+      return null;
+    });
+  };
+
+  const handleInputKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    pane: ChatPane
+  ) => {
+    if (mentionState && mentionState.paneId === pane.id) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionState((prev) =>
+          !prev
+            ? null
+            : {
+                ...prev,
+                selectedIndex: (prev.selectedIndex + 1) % prev.suggestions.length
+              }
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionState((prev) =>
+          !prev
+            ? null
+            : {
+                ...prev,
+                selectedIndex:
+                  (prev.selectedIndex - 1 + prev.suggestions.length) %
+                  prev.suggestions.length
+              }
+        );
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        applyMentionSuggestion(pane.id);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionState(null);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSend(pane);
+    }
   };
 
   // Auto-scroll
@@ -270,23 +396,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     e.preventDefault();
     e.stopPropagation();
     if (message.isSystem) return;
-    const MENU_WIDTH = 260;   // примерно ширина меню
-  const MENU_HEIGHT = 260;  // примерно высота меню
 
-  const { innerWidth, innerHeight } = window;
-  let x = e.clientX;
-  let y = e.clientY;
+    const MENU_WIDTH = 260;
+    const MENU_HEIGHT = 260;
+    const { innerWidth, innerHeight } = window;
+    let x = e.clientX;
+    let y = e.clientY;
 
-  if (x + MENU_WIDTH > innerWidth) {
-    x = innerWidth - MENU_WIDTH - 8;
-  }
-  if (y + MENU_HEIGHT > innerHeight) {
-    y = innerHeight - MENU_HEIGHT - 8;
-  }
-  if (x < 0) x = 0;
-  if (y < 0) y = 0;
+    if (x + MENU_WIDTH > innerWidth) {
+      x = innerWidth - MENU_WIDTH - 8;
+    }
+    if (y + MENU_HEIGHT > innerHeight) {
+      y = innerHeight - MENU_HEIGHT - 8;
+    }
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
 
-  setMsgMenu({ x, y, channel, message });
+    setMsgMenu({ x, y, channel, message });
   };
 
   const closeMsgMenu = () => setMsgMenu(null);
@@ -342,15 +468,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   ) => {
     e.stopPropagation();
     setOpenDropdown((prev) =>
-      prev?.channel === channel && prev?.type === type
-        ? null
-        : { channel, type }
+      prev?.channel === channel && prev?.type === type ? null : { channel, type }
     );
   };
+
   const handleSlowModeSelect = (channel: string, seconds: number) => {
     onModeToggle(channel, 'slow', seconds);
     setOpenDropdown(null);
   };
+
   const handleFollowersModeSelect = (channel: string, minutes: number) => {
     onModeToggle(channel, 'followers', minutes);
     setOpenDropdown(null);
@@ -394,43 +520,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           )}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: '#9ca3af' }}>Строки:</span>
-            <button
-              onClick={() => setRows(1)}
-              style={rowButtonStyle(rows === 1)}
-            >
+            <button onClick={() => setRows(1)} style={rowButtonStyle(rows === 1)}>
               1
             </button>
-            <button
-              onClick={() => setRows(2)}
-              style={rowButtonStyle(rows === 2)}
-            >
+            <button onClick={() => setRows(2)} style={rowButtonStyle(rows === 2)}>
               2
             </button>
           </div>
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: '#9ca3af' }}>Размер:</span>
-            <button
-              onClick={() => changePaneWidth(-20)}
-              style={sizeButtonStyle}
-            >
+            <button onClick={() => changePaneWidth(-20)} style={sizeButtonStyle}>
               W-
             </button>
-            <button
-              onClick={() => changePaneWidth(20)}
-              style={sizeButtonStyle}
-            >
+            <button onClick={() => changePaneWidth(20)} style={sizeButtonStyle}>
               W+
             </button>
-            <button
-              onClick={() => changePaneHeight(-20)}
-              style={sizeButtonStyle}
-            >
+            <button onClick={() => changePaneHeight(-20)} style={sizeButtonStyle}>
               H-
             </button>
-            <button
-              onClick={() => changePaneHeight(20)}
-              style={sizeButtonStyle}
-            >
+            <button onClick={() => changePaneHeight(20)} style={sizeButtonStyle}>
               H+
             </button>
           </div>
@@ -449,13 +557,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             const inputValue = inputValues[pane.id] || '';
             const canSend = !!pane.channel && inputValue.trim().length > 0;
             const isSelected =
-              selectedChannel?.toLowerCase() ===
-              pane.channel.toLowerCase();
-            const modes =
-              roomModes[pane.channel.toLowerCase()] || defaultModes;
+              selectedChannel?.toLowerCase() === pane.channel.toLowerCase();
+            const modes = roomModes[pane.channel.toLowerCase()] || defaultModes;
             const isSlowDropdownOpen =
-              openDropdown?.channel === pane.channel &&
-              openDropdown?.type === 'slow';
+              openDropdown?.channel === pane.channel && openDropdown?.type === 'slow';
             const isFollowersDropdownOpen =
               openDropdown?.channel === pane.channel &&
               openDropdown?.type === 'followers';
@@ -533,9 +638,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
                   <div style={{ position: 'relative' }}>
                     <button
-                      onClick={(e) =>
-                        handleDropdownClick(e, pane.channel, 'slow')
-                      }
+                      onClick={(e) => handleDropdownClick(e, pane.channel, 'slow')}
                       style={modeButtonStyle(modes.slow)}
                       title="Медленный режим"
                     >
@@ -553,14 +656,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         {SLOW_MODE_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
-                            onClick={() =>
-                              handleSlowModeSelect(pane.channel, opt.value)
-                            }
+                            onClick={() => handleSlowModeSelect(pane.channel, opt.value)}
                             style={dropdownItemStyle(
                               opt.value === 0
                                 ? !modes.slow
-                                : modes.slow &&
-                                    modes.slowDuration === opt.value
+                                : modes.slow && modes.slowDuration === opt.value
                             )}
                           >
                             {opt.label}
@@ -580,17 +680,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
                   <div style={{ position: 'relative' }}>
                     <button
-                      onClick={(e) =>
-                        handleDropdownClick(e, pane.channel, 'followers')
-                      }
+                      onClick={(e) => handleDropdownClick(e, pane.channel, 'followers')}
                       style={modeButtonStyle(modes.followers)}
                       title="Только фолловеры"
                     >
                       Foll{' '}
                       {modes.followers
-                        ? `(${formatFollowersDuration(
-                            modes.followersDuration
-                          )})`
+                        ? `(${formatFollowersDuration(modes.followersDuration)})`
                         : ''}{' '}
                       <span style={{ marginLeft: 2, fontSize: 8 }}>▼</span>
                     </button>
@@ -603,10 +699,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                           <button
                             key={opt.value}
                             onClick={() =>
-                              handleFollowersModeSelect(
-                                pane.channel,
-                                opt.value
-                              )
+                              handleFollowersModeSelect(pane.channel, opt.value)
                             }
                             style={dropdownItemStyle(
                               opt.value === -1
@@ -672,19 +765,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
                       const isDeleted = !!m.deleted;
                       const isCleared = !!m.cleared && !isDeleted;
+                      const isMentionedSelf = !!m.mentionedSelf;
 
                       return (
                         <div
                           key={m.msgId || m.id}
                           onContextMenu={(e) =>
-                            handleMessageContextMenu(
-                              e,
-                              pane.channel,
-                              m
-                            )
+                            handleMessageContextMenu(e, pane.channel, m)
                           }
                           data-msg-id={m.msgId}
-                          style={messageStyle(isDeleted, isCleared)}
+                          style={messageStyle(isDeleted, isCleared, isMentionedSelf)}
                         >
                           <div
                             style={{
@@ -693,27 +783,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                               flexShrink: 0
                             }}
                           >
-                            {renderBadges(m.badges)}
+                            {renderBadges(
+                              m.badges,
+                              m.badgeVersions,
+                              m.badgeInfo,
+                              badgeSets
+                            )}
                           </div>
                           <span
-                            style={usernameStyle(
-                              isDeleted,
-                              isCleared,
-                              m.color
-                            )}
+                            style={usernameStyle(isDeleted, isCleared, m.color)}
                           >
                             {m.displayName || m.userLogin}:
                           </span>
-                          <span
-                            style={messageTextStyle(
-                              isDeleted,
-                              isCleared
-                            )}
-                          >
-                            {renderMessageWithEmotes(
-                              m.text,
-                              m.emotes
-                            )}
+                          <span style={messageTextStyle(isDeleted, isCleared)}>
+                            {renderMessageWithEmotes(m.text, m.emotes)}
                           </span>
                           {isDeleted && (
                             <span style={deletedLabelStyle}>
@@ -726,6 +809,27 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   )}
                 </div>
 
+                {/* MENTION SUGGESTIONS */}
+                {mentionState && mentionState.paneId === pane.id && (
+                  <div style={mentionBoxStyle}>
+                    {mentionState.suggestions.map((name, idx) => (
+                      <div
+                        key={name}
+                        style={mentionItemStyle(idx === mentionState.selectedIndex)}
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // чтобы input не терял фокус
+                          setMentionState((prev) =>
+                            prev ? { ...prev, selectedIndex: idx } : prev
+                          );
+                          applyMentionSuggestion(pane.id);
+                        }}
+                      >
+                        {name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* INPUT */}
                 <div style={inputContainerStyle}>
                   <input
@@ -733,15 +837,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     placeholder="Сообщение..."
                     disabled={!pane.channel}
                     value={inputValue}
-                    onChange={(e) =>
-                      handleInputChange(pane.id, e.target.value)
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleSend(pane);
-                      }
-                    }}
+                    onChange={(e) => handleInputChange(pane.id, e.target.value)}
+                    onKeyDown={(e) => handleInputKeyDown(e, pane)}
                     style={inputStyle}
                   />
                   <button
@@ -831,6 +928,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   );
 };
 
+export default ChatArea;
+
 // =====================================================
 // Styles
 // =====================================================
@@ -866,9 +965,7 @@ const chatsGridStyle = (isTwoRows: boolean): React.CSSProperties => ({
 const emptyStateStyle = (isDropActive: boolean): React.CSSProperties => ({
   flex: 1,
   borderRadius: 8,
-  border: isDropActive
-    ? '1px dashed #4ade80'
-    : '1px dashed #374151',
+  border: isDropActive ? '1px dashed #4ade80' : '1px dashed #374151',
   background: '#020617',
   color: '#6b7280',
   fontSize: 13,
@@ -884,6 +981,7 @@ const chatPaneStyle = (
   isDragging: boolean,
   isSelected: boolean
 ): React.CSSProperties => ({
+  position: 'relative', // важно для позиционирования выпадашки упоминаний
   flex: `0 0 ${width}px`,
   width,
   maxWidth: width,
@@ -1006,6 +1104,28 @@ const dropdownMenuStyle: React.CSSProperties = {
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
 };
 
+const mentionBoxStyle: React.CSSProperties = {
+  position: 'absolute',
+  bottom: 32, // над инпутом
+  left: 6,
+  right: 6,
+  maxHeight: 150,
+  overflowY: 'auto',
+  background: '#111827',
+  border: '1px solid #374151',
+  borderRadius: 6,
+  zIndex: 2000,
+  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+  fontSize: 12
+};
+
+const mentionItemStyle = (active: boolean): React.CSSProperties => ({
+  padding: '4px 8px',
+  cursor: 'pointer',
+  background: active ? '#4b5563' : 'transparent',
+  color: '#e5e7eb'
+});
+
 const dropdownItemStyle = (selected: boolean): React.CSSProperties => ({
   width: '100%',
   textAlign: 'left',
@@ -1046,10 +1166,15 @@ function modeButtonStyle(
 
 const messageStyle = (
   isDeleted: boolean = false,
-  isCleared: boolean = false
+  isCleared: boolean = false,
+  isMentionedSelf: boolean = false
 ): React.CSSProperties => ({
   fontSize: 12,
-  background: isDeleted ? '#291415' : '#111827',
+  background: isDeleted
+    ? '#291415'
+    : isMentionedSelf
+    ? '#bd8700'
+    : '#111827',
   borderRadius: 4,
   padding: '2px 4px',
   display: 'flex',
@@ -1067,11 +1192,7 @@ const usernameStyle = (
   color?: string
 ): React.CSSProperties => ({
   fontWeight: 600,
-  color: isDeleted
-    ? '#9ca3af'
-    : isCleared
-    ? '#6b7280'
-    : color || '#e5e7eb',
+  color: isDeleted ? '#9ca3af' : isCleared ? '#6b7280' : color || '#e5e7eb',
   marginRight: 4,
   textDecoration: 'none',
   flexShrink: 0
@@ -1095,10 +1216,7 @@ const deletedLabelStyle: React.CSSProperties = {
   fontWeight: 'bold'
 };
 
-const contextMenuStyle = (
-  x: number,
-  y: number
-): React.CSSProperties => ({
+const contextMenuStyle = (x: number, y: number): React.CSSProperties => ({
   position: 'fixed',
   top: y,
   left: x,
@@ -1172,12 +1290,74 @@ function formatFollowersDuration(minutes: number): string {
   return `${Math.floor(minutes / 43200)}мес`;
 }
 
-function renderBadges(badges: string[]) {
+function badgeTitle(setId: string, months?: string): string {
+  switch (setId) {
+    case 'broadcaster':
+      return 'Стример';
+    case 'moderator':
+      return 'Модератор';
+    case 'vip':
+      return 'VIP';
+    case 'subscriber':
+      return months ? `Подписчик (${months} мес.)` : 'Подписчик';
+    case 'staff':
+      return 'Twitch Staff';
+    case 'admin':
+      return 'Twitch Admin';
+    case 'global_mod':
+      return 'Global Moderator';
+    default:
+      return setId;
+  }
+}
+
+function renderBadges(
+  badges: string[],
+  badgeVersions?: Record<string, string>,
+  badgeInfo?: Record<string, string>,
+  badgeSets?: Record<string, Record<string, any>>
+) {
   if (!badges.length) return null;
-  const mapping: Record<
-    string,
-    { label: string; color: string }
-  > = {
+
+  // 1) Если badgeSets есть (Helix отдал глобальные бейджи) — рисуем картинки
+  if (badgeSets && Object.keys(badgeSets).length > 0) {
+    return badges.map((setId, i) => {
+      const set = badgeSets[setId];
+      if (!set) return null;
+
+      const versionId = badgeVersions?.[setId] || '1';
+      const verData = set[versionId] || Object.values(set)[0];
+
+      if (!verData) return null;
+
+      const url =
+        verData.image_url_1x ||
+        verData.image_url_2x ||
+        verData.image_url_4x;
+      if (!url) return null;
+
+      const months = badgeInfo?.[setId];
+      const title = verData.title || badgeTitle(setId, months);
+
+      return (
+        <img
+          key={setId + i}
+          src={url}
+          alt={setId}
+          title={title}
+          style={{
+            width: 18,
+            height: 18,
+            marginRight: 2,
+            flexShrink: 0
+          }}
+        />
+      );
+    });
+  }
+
+  // 2) Фолбэк: если не смогли загрузить глобальные бейджи — текстовые бейджики
+  const mapping: Record<string, { label: string; color: string }> = {
     broadcaster: { label: 'S', color: '#a855f7' },
     moderator: { label: 'M', color: '#22c55e' },
     vip: { label: 'V', color: '#0ea5e9' },
@@ -1186,12 +1366,18 @@ function renderBadges(badges: string[]) {
     admin: { label: 'T', color: '#f97316' },
     global_mod: { label: 'T', color: '#f97316' }
   };
-  return badges.map((b, i) => {
-    const info = mapping[b];
+
+  return badges.map((setId, i) => {
+    const info = mapping[setId];
     if (!info) return null;
+
+    const months = badgeInfo?.[setId];
+    const title = badgeTitle(setId, months);
+
     return (
       <span
-        key={b + i}
+        key={setId + i}
+        title={title}
         style={{
           minWidth: 14,
           height: 14,
@@ -1202,7 +1388,9 @@ function renderBadges(badges: string[]) {
           background: info.color,
           color: '#020617',
           fontWeight: 700,
-          padding: '0 2px'
+          padding: '0 2px',
+          marginRight: 2,
+          flexShrink: 0
         }}
       >
         {info.label}
@@ -1255,11 +1443,7 @@ function renderMessageWithEmotes(
     lastIndex = t.end + 1;
   });
   if (lastIndex < text.length) {
-    result.push(
-      <span key={'t-tail'}>{text.slice(lastIndex)}</span>
-    );
+    result.push(<span key={'t-tail'}>{text.slice(lastIndex)}</span>);
   }
   return result;
 }
-
-export default ChatArea;

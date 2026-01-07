@@ -67,12 +67,13 @@ const App: React.FC = () => {
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatReady, setChatReady] = useState(false);
-
+  const [currentUserLogin, setCurrentUserLogin] = useState<string | null>(null);
   const joinedRef = useRef<Set<string>>(new Set());
   const modeChangeTimestamps = useRef<Record<string, number>>({});
   const pendingSelfMessagesRef = useRef<
     Record<string, PendingSelfMessage[]>
   >({});
+  const currentUserLoginRef = useRef<string | null>(null);
 
   const [globalUsers, setGlobalUsers] = useState<Record<string, GlobalUserData>>(
     {}
@@ -379,6 +380,10 @@ const App: React.FC = () => {
           return;
         }
 
+		setCurrentUserLogin(user.login.toLowerCase());
+
+currentUserLoginRef.current = user.login.toLowerCase();
+
         let token = await window.electronAPI.config.get(
           'twitch.accessToken'
         );
@@ -440,7 +445,26 @@ const App: React.FC = () => {
             }
           }
 
-          const msg = buildChatMessage(channel, message, tags, self);
+const selfLogin = currentUserLoginRef.current;
+const mentionedSelf =
+  !!selfLogin &&
+  message.toLowerCase().includes('@' + selfLogin);
+
+const msg = buildChatMessage(
+  channel,
+  message,
+  tags,
+  self,
+  mentionedSelf
+);
+
+if (mentionedSelf) {
+  console.log('[App] Упоминание себя в сообщении:', {
+    channel: chanLower,
+    text: message
+  });
+}
+
           const loginLower = (tags.username || '').toLowerCase();
           const odaterId = tags['user-id'] || loginLower;
 
@@ -975,13 +999,18 @@ function buildChatMessage(
   channel: string,
   text: string,
   tags: any,
-  self: boolean
+  self: boolean,
+  mentionedSelf?: boolean
 ): ChatMessage {
   const localId = `msg-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 10)}`;
 
   const msgId: string | undefined = tags.id || undefined;
+
+  const badgeVersions: Record<string, string> = tags.badges || {};
+  const badgeInfo: Record<string, string> = tags['badge-info'] || {};
+  const badges = Object.keys(badgeVersions);
 
   return {
     id: localId,
@@ -991,13 +1020,17 @@ function buildChatMessage(
     userLogin: tags.username || tags.login || '',
     displayName: tags['display-name'] || tags.username || 'unknown',
     color: tags.color,
-    badges: Object.keys(tags.badges || {}),
+    badges,
+    badgeInfo,
+    badgeVersions,
     self,
     timestamp: tags['tmi-sent-ts']
       ? parseInt(tags['tmi-sent-ts'], 10)
       : Date.now(),
     emotes: tags.emotes,
-    deleted: false
+    deleted: false,
+    // НОВОЕ:
+    mentionedSelf: mentionedSelf ?? false
   };
 }
 

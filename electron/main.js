@@ -885,6 +885,30 @@ async function sendChatMessageHelix(channel, message) {
   return { messageId: data?.message_id };
 }
 
+async function fetchGlobalChatBadgesHelix() {
+  const res = await helixFetch('https://api.twitch.tv/helix/chat/badges/global');
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.message || 'Failed to fetch global chat badges');
+  }
+  return json; // { data: [ { set_id, versions: [...] }, ... ] }
+}
+
+async function fetchChannelChatBadgesHelix(broadcasterId) {
+  const bid = broadcasterId || store.get('twitch.userId');
+  if (!bid) throw new Error('No broadcaster_id provided');
+
+  const url = new URL('https://api.twitch.tv/helix/chat/badges');
+  url.searchParams.set('broadcaster_id', bid);
+
+  const res = await helixFetch(url.toString());
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.message || 'Failed to fetch channel chat badges');
+  }
+  return json; // { data: [...] }
+}
+
 // ----------------- IPC EXPORTS -----------------
 
 ipcMain.handle('twitch:getUserDetails', (e, login) =>
@@ -977,4 +1001,13 @@ ipcMain.handle('twitch:sendChatMessage', (e, ch, msg) =>
 // Гарантировать свежий accessToken перед подключением чата
 ipcMain.handle('twitch:ensureAccessToken', () =>
   ensureAccessTokenHelix()
+);
+
+ipcMain.handle('twitch:getGlobalBadges', () =>
+  fetchGlobalChatBadgesHelix()
+);
+
+// при необходимости, если будешь использовать:
+ipcMain.handle('twitch:getChannelBadges', (e, broadcasterId) =>
+  fetchChannelChatBadgesHelix(broadcasterId)
 );
