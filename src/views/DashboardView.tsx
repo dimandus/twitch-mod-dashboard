@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ChatArea, {
   ChatPane,
   ModerationAction
@@ -35,6 +35,13 @@ const defaultModes: ChatModes = {
   unique: false,
   shield: false
 };
+
+function clampUserScale(value: number): number {
+  const min = 0.7;
+  const max = 1.5;
+  if (Number.isNaN(value)) return 1;
+  return Math.min(max, Math.max(min, value));
+}
 
 interface DashboardViewProps {
   chatPanes: ChatPane[];
@@ -80,6 +87,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   activeChatters,
   onSendMessage
 }) => {
+  // Глобальные множители шрифтов/размеров
+  const [fontScale, setFontScale] = useState(1);
+  const [globalScale, setGlobalScale] = useState(1);
+
+  const handleFontScaleChange = (next: number) => {
+    setFontScale(clampUserScale(next));
+  };
+
+  const handleGlobalScaleChange = (next: number) => {
+    setGlobalScale(clampUserScale(next));
+  };
+
   const toggleSidebar = () =>
     setSidebarCollapsed((v) => !v);
 
@@ -225,7 +244,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
         case 'clearChat':
           await window.electronAPI.twitch.clearChat(channel);
-          // Локально помечаем сообщения как "cleared"
           setChatPanes((prev) =>
             prev.map((p) => {
               if (p.channel.toLowerCase() !== channel) return p;
@@ -401,6 +419,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         onOpenUserLog={onOpenUserLog}
         onOpenUserProfile={onOpenUserProfile}
         activeChatters={activeChatters}
+        fontScale={fontScale}
+        globalScale={globalScale}
       />
 
       <ChatArea
@@ -417,6 +437,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         onModeToggle={handleModeToggle}
         onOpenUserLog={onOpenUserLog}
         onOpenUserProfile={onOpenUserProfile}
+        fontScale={fontScale}
+        globalScale={globalScale}
+        onFontScaleChange={handleFontScaleChange}
+        onGlobalScaleChange={handleGlobalScaleChange}
       />
     </div>
   );

@@ -106,6 +106,12 @@ interface ChatAreaProps {
   onModeToggle: (channel: string, mode: ChatModeKey, value?: number) => void;
   onOpenUserLog: (userLogin: string) => void;
   onOpenUserProfile: (userLogin: string) => void;
+
+  // Глобальные скейлы
+  fontScale: number;
+  globalScale: number;
+  onFontScaleChange: (next: number) => void;
+  onGlobalScaleChange: (next: number) => void;
 }
 
 // =====================================================
@@ -125,7 +131,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   roomModes,
   onModeToggle,
   onOpenUserLog,
-  onOpenUserProfile
+  onOpenUserProfile,
+  fontScale,
+  globalScale,
+  onFontScaleChange,
+  onGlobalScaleChange
 }) => {
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -135,8 +145,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [paneWidth, setPaneWidth] = useState(320);
   const [paneHeight, setPaneHeight] = useState(260);
 
-  const [layoutLoaded, setLayoutLoaded] = useState(false); // если не нужен - можно удалить
-
   const scrollContainersRef = useRef<Record<string, HTMLDivElement | null>>({});
 
   const [mentionState, setMentionState] = useState<{
@@ -144,7 +152,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     query: string;
     suggestions: string[];
     selectedIndex: number;
-    atIndex: number; // позиция '@' в строке
+    atIndex: number;
   } | null>(null);
 
   const [msgMenu, setMsgMenu] = useState<{
@@ -161,19 +169,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const [badgeSets, setBadgeSets] = useState<Record<string, Record<string, any>>>({});
 
+  // авто‑масштаб от размера окна
+  const [autoScale, setAutoScale] = useState(1);
+
   // Загрузка глобальных бейджей через Helix
   useEffect(() => {
     (async () => {
       try {
         const json = await window.electronAPI.twitch.getGlobalBadges();
-        // json: { data: [ { set_id, versions: [...] }, ... ] }
-
         const sets: Record<string, Record<string, any>> = {};
         for (const set of json.data || []) {
           const setId = set.set_id;
           const vers: Record<string, any> = {};
           for (const v of set.versions || []) {
-            vers[v.id] = v; // v: { id, image_url_1x, image_url_2x, ... }
+            vers[v.id] = v;
           }
           sets[setId] = vers;
         }
@@ -184,6 +193,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     })();
   }, []);
 
+  // Клик вне — закрывать меню/дропдауны
   useEffect(() => {
     const handleClick = () => {
       setOpenDropdown(null);
@@ -193,8 +203,34 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     return () => window.removeEventListener('click', handleClick);
   }, []);
 
-  const changePaneWidth = (delta: number) => setPaneWidth((w) => clampWidth(w + delta));
-  const changePaneHeight = (delta: number) => setPaneHeight((h) => clampHeight(h + delta));
+  // Авто‑масштаб от размера окна
+  useEffect(() => {
+    const BASE_WIDTH = 1920;
+    const BASE_HEIGHT = 1080;
+
+    const updateAutoScale = () => {
+      const wScale = window.innerWidth / BASE_WIDTH;
+      const hScale = window.innerHeight / BASE_HEIGHT;
+      const next = Math.min(wScale, hScale);
+      const clamped = clampAutoScale(next);
+      setAutoScale(clamped);
+    };
+
+    updateAutoScale();
+    window.addEventListener('resize', updateAutoScale);
+    return () => window.removeEventListener('resize', updateAutoScale);
+  }, []);
+
+  const changePaneWidth = (delta: number) =>
+    setPaneWidth((w) => clampWidth(w + delta));
+  const changePaneHeight = (delta: number) =>
+    setPaneHeight((h) => clampHeight(h + delta));
+
+  const changeFontScale = (delta: number) =>
+    onFontScaleChange(fontScale + delta);
+
+  const changeGlobalScale = (delta: number) =>
+    onGlobalScaleChange(globalScale + delta);
 
   // Drag & Drop
   const handleContainerDragOver: React.DragEventHandler<HTMLDivElement> = (e) => {
@@ -264,14 +300,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       return;
     }
 
-    // Проверяем, что '@' в начале слова
+    // '@' должен быть началом слова
     if (atIndex > 0 && !/\s/.test(value[atIndex - 1])) {
       setMentionState(null);
       return;
     }
 
     const after = value.slice(atIndex + 1);
-    // Если после @ уже есть пробел — упоминание завершилось
     if (after.includes(' ')) {
       setMentionState(null);
       return;
@@ -318,13 +353,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       const current = inputValues[paneId] || '';
 
       const before = current.slice(0, atIndex);
-      // мы знаем, что после @ нет пробелов (updateMentionSuggestions так фильтрует),
-      // поэтому просто отрезаем всё после @ и вставляем полный ник
       const newValue = before + '@' + name + ' ';
 
       setInputValues((p) => ({ ...p, [paneId]: newValue }));
 
-      // Закрываем подсказку
       return null;
     });
   };
@@ -484,6 +516,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const isTwoRows = rows === 2;
 
+  // итоговые множители
+  const combinedScale = globalScale * autoScale;
+  const textScale = fontScale * combinedScale;
+  const scaledPaneWidth = paneWidth * combinedScale;
+  const scaledPaneHeight = paneHeight * combinedScale;
+
   return (
     <section
       style={{
@@ -504,22 +542,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     >
       <div style={topPanelStyle}>
         <div>
-          <div style={{ fontSize: 13, color: '#9ca3af' }}>Область чатов</div>
-          <div style={{ fontSize: 11, color: '#6b7280' }}>
+          <div style={{ fontSize: 13 * textScale, color: '#9ca3af' }}>Область чатов</div>
+          <div style={{ fontSize: 11 * textScale, color: '#6b7280' }}>
             ПКМ по каналу или перетащи сюда
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {selectedChannel && (
-            <div style={{ fontSize: 11, color: '#9ca3af' }}>
+            <div style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>
               Канал:{' '}
               <strong style={{ color: '#e5e7eb' }}>
                 {selectedChannel}
               </strong>
             </div>
           )}
+
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#9ca3af' }}>Строки:</span>
+            <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Строки:</span>
             <button onClick={() => setRows(1)} style={rowButtonStyle(rows === 1)}>
               1
             </button>
@@ -527,8 +566,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               2
             </button>
           </div>
+
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#9ca3af' }}>Размер:</span>
+            <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Размер:</span>
             <button onClick={() => changePaneWidth(-20)} style={sizeButtonStyle}>
               W-
             </button>
@@ -540,6 +580,26 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             </button>
             <button onClick={() => changePaneHeight(20)} style={sizeButtonStyle}>
               H+
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Шрифт:</span>
+            <button onClick={() => changeFontScale(-0.1)} style={sizeButtonStyle}>
+              A-
+            </button>
+            <button onClick={() => changeFontScale(0.1)} style={sizeButtonStyle}>
+              A+
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Scale:</span>
+            <button onClick={() => changeGlobalScale(-0.1)} style={sizeButtonStyle}>
+              S-
+            </button>
+            <button onClick={() => changeGlobalScale(0.1)} style={sizeButtonStyle}>
+              S+
             </button>
           </div>
         </div>
@@ -574,8 +634,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 onDrop={(e) => handlePaneDrop(e, pane.id)}
                 onDragEnd={handlePaneDragEnd}
                 style={chatPaneStyle(
-                  paneWidth,
-                  paneHeight,
+                  scaledPaneWidth,
+                  scaledPaneHeight,
                   draggingId === pane.id,
                   isSelected
                 )}
@@ -585,7 +645,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   <div>
                     <div
                       style={{
-                        fontSize: 12,
+                        fontSize: 12 * textScale,
                         color: '#9ca3af',
                         textTransform: 'uppercase'
                       }}
@@ -594,7 +654,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     </div>
                     <div
                       style={{
-                        fontSize: 14,
+                        fontSize: 14 * textScale,
                         fontWeight: 500
                       }}
                     >
@@ -750,14 +810,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   style={messagesContainerStyle}
                 >
                   {pane.messages.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>
+                    <div style={{ fontSize: 12 * textScale, color: '#6b7280' }}>
                       Сообщений пока нет.
                     </div>
                   ) : (
                     pane.messages.map((m) => {
                       if (m.isSystem) {
                         return (
-                          <div key={m.id} style={systemMessageStyle}>
+                          <div key={m.id} style={systemMessageStyle(textScale)}>
                             {m.text}
                           </div>
                         );
@@ -774,7 +834,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                             handleMessageContextMenu(e, pane.channel, m)
                           }
                           data-msg-id={m.msgId}
-                          style={messageStyle(isDeleted, isCleared, isMentionedSelf)}
+                          style={messageStyle(
+                            isDeleted,
+                            isCleared,
+                            isMentionedSelf,
+                            textScale
+                          )}
                         >
                           <div
                             style={{
@@ -791,11 +856,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                             )}
                           </div>
                           <span
-                            style={usernameStyle(isDeleted, isCleared, m.color)}
+                            style={usernameStyle(
+                              isDeleted,
+                              isCleared,
+                              m.color,
+                              textScale
+                            )}
                           >
                             {m.displayName || m.userLogin}:
                           </span>
-                          <span style={messageTextStyle(isDeleted, isCleared)}>
+                          <span
+                            style={messageTextStyle(
+                              isDeleted,
+                              isCleared,
+                              textScale
+                            )}
+                          >
                             {renderMessageWithEmotes(m.text, m.emotes)}
                           </span>
                           {isDeleted && (
@@ -811,13 +887,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
                 {/* MENTION SUGGESTIONS */}
                 {mentionState && mentionState.paneId === pane.id && (
-                  <div style={mentionBoxStyle}>
+                  <div style={mentionBoxStyle(textScale)}>
                     {mentionState.suggestions.map((name, idx) => (
                       <div
                         key={name}
                         style={mentionItemStyle(idx === mentionState.selectedIndex)}
                         onMouseDown={(e) => {
-                          e.preventDefault(); // чтобы input не терял фокус
+                          e.preventDefault();
                           setMentionState((prev) =>
                             prev ? { ...prev, selectedIndex: idx } : prev
                           );
@@ -839,7 +915,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     value={inputValue}
                     onChange={(e) => handleInputChange(pane.id, e.target.value)}
                     onKeyDown={(e) => handleInputKeyDown(e, pane)}
-                    style={inputStyle}
+                    style={inputStyle(textScale)}
                   />
                   <button
                     disabled={!canSend}
@@ -981,7 +1057,7 @@ const chatPaneStyle = (
   isDragging: boolean,
   isSelected: boolean
 ): React.CSSProperties => ({
-  position: 'relative', // важно для позиционирования выпадашки упоминаний
+  position: 'relative',
   flex: `0 0 ${width}px`,
   width,
   maxWidth: width,
@@ -1034,15 +1110,15 @@ const inputContainerStyle: React.CSSProperties = {
   flexShrink: 0
 };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle = (fontScale: number): React.CSSProperties => ({
   flex: 1,
   padding: '4px 6px',
   borderRadius: 6,
   border: '1px solid #374151',
   background: '#020617',
   color: '#e5e7eb',
-  fontSize: 12
-};
+  fontSize: 12 * fontScale
+});
 
 const sendButtonStyle = (canSend: boolean): React.CSSProperties => ({
   padding: '4px 10px',
@@ -1104,9 +1180,9 @@ const dropdownMenuStyle: React.CSSProperties = {
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
 };
 
-const mentionBoxStyle: React.CSSProperties = {
+const mentionBoxStyle = (fontScale: number): React.CSSProperties => ({
   position: 'absolute',
-  bottom: 32, // над инпутом
+  bottom: 32,
   left: 6,
   right: 6,
   maxHeight: 150,
@@ -1116,8 +1192,8 @@ const mentionBoxStyle: React.CSSProperties = {
   borderRadius: 6,
   zIndex: 2000,
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-  fontSize: 12
-};
+  fontSize: 12 * fontScale
+});
 
 const mentionItemStyle = (active: boolean): React.CSSProperties => ({
   padding: '4px 8px',
@@ -1167,9 +1243,10 @@ function modeButtonStyle(
 const messageStyle = (
   isDeleted: boolean = false,
   isCleared: boolean = false,
-  isMentionedSelf: boolean = false
+  isMentionedSelf: boolean = false,
+  fontScale: number = 1
 ): React.CSSProperties => ({
-  fontSize: 12,
+  fontSize: 12 * fontScale,
   background: isDeleted
     ? '#291415'
     : isMentionedSelf
@@ -1189,10 +1266,16 @@ const messageStyle = (
 const usernameStyle = (
   isDeleted: boolean,
   isCleared: boolean,
-  color?: string
+  color: string | undefined,
+  fontScale: number = 1
 ): React.CSSProperties => ({
   fontWeight: 600,
-  color: isDeleted ? '#9ca3af' : isCleared ? '#6b7280' : color || '#e5e7eb',
+  fontSize: 12 * fontScale,
+  color: isDeleted
+    ? '#9ca3af'
+    : isCleared
+    ? '#6b7280'
+    : color || '#e5e7eb',
   marginRight: 4,
   textDecoration: 'none',
   flexShrink: 0
@@ -1200,8 +1283,10 @@ const usernameStyle = (
 
 const messageTextStyle = (
   isDeleted: boolean,
-  isCleared: boolean
+  isCleared: boolean,
+  fontScale: number = 1
 ): React.CSSProperties => ({
+  fontSize: 12 * fontScale,
   color: isDeleted ? '#9ca3af' : isCleared ? '#6b7280' : '#e5e7eb',
   textDecoration: isDeleted ? 'line-through' : 'none',
   wordBreak: 'break-word'
@@ -1255,18 +1340,17 @@ const menuDividerStyle: React.CSSProperties = {
   margin: '4px 0'
 };
 
-// Системное сообщение ("Чат очищен модератором")
-const systemMessageStyle: React.CSSProperties = {
+const systemMessageStyle = (fontScale: number): React.CSSProperties => ({
   textAlign: 'center',
   color: '#9ca3af',
-  fontSize: 11,
+  fontSize: 11 * fontScale,
   padding: '4px 0',
   borderTop: '1px solid #374151',
   borderBottom: '1px solid #374151',
   margin: '8px 0',
   background: '#1f2937',
   fontStyle: 'italic'
-};
+});
 
 // =====================================================
 // Helpers
@@ -1278,6 +1362,13 @@ function clampWidth(w: number): number {
 
 function clampHeight(h: number): number {
   return Math.min(600, Math.max(180, h));
+}
+
+function clampAutoScale(value: number): number {
+  const min = 0.7;
+  const max = 1.5;
+  if (Number.isNaN(value)) return 1;
+  return Math.min(max, Math.max(min, value));
 }
 
 function formatFollowersDuration(minutes: number): string {
@@ -1319,7 +1410,6 @@ function renderBadges(
 ) {
   if (!badges.length) return null;
 
-  // 1) Если badgeSets есть (Helix отдал глобальные бейджи) — рисуем картинки
   if (badgeSets && Object.keys(badgeSets).length > 0) {
     return badges.map((setId, i) => {
       const set = badgeSets[setId];
@@ -1356,7 +1446,6 @@ function renderBadges(
     });
   }
 
-  // 2) Фолбэк: если не смогли загрузить глобальные бейджи — текстовые бейджики
   const mapping: Record<string, { label: string; color: string }> = {
     broadcaster: { label: 'S', color: '#a855f7' },
     moderator: { label: 'M', color: '#22c55e' },

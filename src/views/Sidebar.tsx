@@ -72,6 +72,9 @@ interface SidebarProps {
   onOpenUserLog: (userLogin: string) => void;
   onOpenUserProfile: (userLogin: string) => void;
   activeChatters: Record<string, Map<string, ActiveChatter>>;
+
+  fontScale: number;
+  globalScale: number;
 }
 
 // =====================================================
@@ -86,7 +89,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   onOpenChatForChannel,
   onOpenUserLog,
   onOpenUserProfile,
-  activeChatters
+  activeChatters,
+  fontScale,
+  globalScale
 }) => {
   const [channels, setChannels] = useState<string[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
@@ -133,6 +138,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   >({});
 
   const lastLiveRef = useRef<Record<string, boolean>>({});
+
+  const [autoScale, setAutoScale] = useState(1);
 
   // Toast
   const addToast = (
@@ -206,6 +213,24 @@ const Sidebar: React.FC<SidebarProps> = ({
         );
       }
     })();
+  }, []);
+
+  // авто‑масштаб от размера окна
+  useEffect(() => {
+    const BASE_WIDTH = 1920;
+    const BASE_HEIGHT = 1080;
+
+    const updateAutoScale = () => {
+      const wScale = window.innerWidth / BASE_WIDTH;
+      const hScale = window.innerHeight / BASE_HEIGHT;
+      const next = Math.min(wScale, hScale);
+      const clamped = clampAutoScale(next);
+      setAutoScale(clamped);
+    };
+
+    updateAutoScale();
+    window.addEventListener('resize', updateAutoScale);
+    return () => window.removeEventListener('resize', updateAutoScale);
   }, []);
 
   // Закрытие контекстных меню
@@ -575,6 +600,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     return a.localeCompare(b);
   });
 
+  const textScale = fontScale * globalScale * autoScale;
+
   return (
     <>
       <aside style={sidebarStyle(collapsed)}>
@@ -582,7 +609,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {!collapsed && (
             <span
               style={{
-                fontSize: 12,
+                fontSize: 12 * textScale,
                 textTransform: 'uppercase',
                 color: '#9ca3af'
               }}
@@ -592,7 +619,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
           <button
             onClick={onToggleCollapse}
-            style={collapseButtonStyle}
+            style={{ ...collapseButtonStyle, fontSize: 10 * textScale }}
           >
             {collapsed ? '▶' : '◀'}
           </button>
@@ -609,7 +636,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           >
             {/* Секция каналов */}
             <div style={sectionStyle}>
-              <div style={sectionHeaderStyle}>
+              <div style={{ ...sectionHeaderStyle, fontSize: 12 * textScale }}>
                 <span>
                   Каналы ({filteredChannels.length}
                   {channelFilter === 'mod'
@@ -620,7 +647,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button
                     onClick={openAddChannel}
-                    style={iconButtonStyle}
+                    style={{
+                      ...iconButtonStyle,
+                      fontSize: 12 * textScale
+                    }}
                     title="Добавить"
                   >
                     +
@@ -630,6 +660,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     disabled={modChannelsLoading}
                     style={{
                       ...iconButtonStyle,
+                      fontSize: 12 * textScale,
                       color: '#22c55e',
                       opacity: modChannelsLoading ? 0.5 : 1
                     }}
@@ -642,6 +673,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     disabled={followedChannelsLoading}
                     style={{
                       ...iconButtonStyle,
+                      fontSize: 12 * textScale,
                       color: '#a855f7',
                       opacity: followedChannelsLoading ? 0.5 : 1
                     }}
@@ -653,6 +685,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={handleClearAllChannels}
                     style={{
                       ...iconButtonStyle,
+                      fontSize: 12 * textScale,
                       color: '#ef4444'
                     }}
                     title="Очистить список каналов"
@@ -671,17 +704,23 @@ const Sidebar: React.FC<SidebarProps> = ({
                 }}
               >
                 <button
-                  style={channelFilterButtonStyle(
-                    channelFilter === 'all'
-                  )}
+                  style={{
+                    ...channelFilterButtonStyle(
+                      channelFilter === 'all'
+                    ),
+                    fontSize: 10 * textScale
+                  }}
                   onClick={() => setChannelFilter('all')}
                 >
                   Все
                 </button>
                 <button
-                  style={channelFilterButtonStyle(
-                    channelFilter === 'mod'
-                  )}
+                  style={{
+                    ...channelFilterButtonStyle(
+                      channelFilter === 'mod'
+                    ),
+                    fontSize: 10 * textScale
+                  }}
                   onClick={() => setChannelFilter('mod')}
                 >
                   Где я мод
@@ -693,7 +732,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div
                     style={{
                       color: '#6b7280',
-                      fontSize: 12,
+                      fontSize: 12 * textScale,
                       padding: '8px 4px'
                     }}
                   >
@@ -714,9 +753,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                   return (
                     <button
                       key={ch}
-                      style={channelButtonStyle(
-                        selectedChannel === ch
-                      )}
+                      style={{
+                        ...channelButtonStyle(
+                          selectedChannel === ch
+                        ),
+                        fontSize: 13 * textScale
+                      }}
                       onClick={() => handleSelectChannel(ch)}
                       onContextMenu={(e) =>
                         handleChannelContextMenu(e, ch)
@@ -764,7 +806,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </span>
                         <span
                           style={{
-                            fontSize: 11,
+                            fontSize: 11 * textScale,
                             color: '#9ca3af',
                             marginLeft: 'auto',
                             flexShrink: 0
@@ -792,7 +834,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div
                     style={{
                       color: '#fecaca',
-                      fontSize: 11,
+                      fontSize: 11 * textScale,
                       padding: 4
                     }}
                   >
@@ -804,7 +846,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             {/* Секция зрителей */}
             <div style={sectionStyle}>
-              <div style={sectionHeaderStyle}>
+              <div style={{ ...sectionHeaderStyle, fontSize: 12 * textScale }}>
                 <span>
                   Зрители{' '}
                   {usingFallback && (
@@ -821,7 +863,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {selectedChannel && !viewersLoading && (
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 11 * textScale,
                       color: '#6b7280'
                     }}
                   >
@@ -831,19 +873,34 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div style={scrollListStyle}>
                 {!selectedChannel && (
-                  <div style={{ color: '#6b7280' }}>
+                  <div
+                    style={{
+                      color: '#6b7280',
+                      fontSize: 12 * textScale
+                    }}
+                  >
                     Выбери канал
                   </div>
                 )}
                 {selectedChannel && viewersLoading && (
-                  <div style={{ color: '#6b7280' }}>
+                  <div
+                    style={{
+                      color: '#6b7280',
+                      fontSize: 12 * textScale
+                    }}
+                  >
                     Загрузка...
                   </div>
                 )}
                 {selectedChannel &&
                   viewersError &&
                   !viewersLoading && (
-                    <div style={{ color: '#fca5a5' }}>
+                    <div
+                      style={{
+                        color: '#fca5a5',
+                        fontSize: 12 * textScale
+                      }}
+                    >
                       {viewersError}
                     </div>
                   )}
@@ -851,7 +908,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                   !viewersLoading &&
                   !viewersError &&
                   viewers.length === 0 && (
-                    <div style={{ color: '#6b7280' }}>
+                    <div
+                      style={{
+                        color: '#6b7280',
+                        fontSize: 12 * textScale
+                      }}
+                    >
                       Зрителей нет
                     </div>
                   )}
@@ -908,6 +970,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 role={v.role}
                                 isBot={v.isBot}
                                 badgeSets={badgeSets}
+                                fontScale={textScale}
                               />
                               <span
                                 style={{
@@ -916,7 +979,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                                   whiteSpace: 'nowrap',
                                   fontWeight: isModOrBroadcastor
                                     ? 'bold'
-                                    : 'normal'
+                                    : 'normal',
+                                  fontSize: 12 * textScale
                                 }}
                               >
                                 {v.displayName || v.login}
@@ -947,7 +1011,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               style={{
                 marginTop: 0,
                 marginBottom: 8,
-                fontSize: 16
+                fontSize: 16 * textScale
               }}
             >
               Добавить канал
@@ -962,14 +1026,17 @@ const Sidebar: React.FC<SidebarProps> = ({
                 if (e.key === 'Enter') handleAddChannel();
               }}
               placeholder="Логин канала"
-              style={inputStyle}
+              style={{
+                ...inputStyle,
+                fontSize: 13 * textScale
+              }}
               autoFocus
             />
             {addChannelError && (
               <div
                 style={{
                   color: '#fecaca',
-                  fontSize: 12,
+                  fontSize: 12 * textScale,
                   marginTop: 4
                 }}
               >
@@ -986,13 +1053,19 @@ const Sidebar: React.FC<SidebarProps> = ({
             >
               <button
                 onClick={() => setIsAddChannelOpen(false)}
-                style={buttonSecondaryStyle}
+                style={{
+                  ...buttonSecondaryStyle,
+                  fontSize: 13 * textScale
+                }}
               >
                 Отмена
               </button>
               <button
                 onClick={handleAddChannel}
-                style={buttonPrimaryStyle}
+                style={{
+                  ...buttonPrimaryStyle,
+                  fontSize: 13 * textScale
+                }}
               >
                 Добавить
               </button>
@@ -1013,13 +1086,20 @@ const Sidebar: React.FC<SidebarProps> = ({
           >
             <button
               onClick={handleOpenChatFromContextMenu}
-              style={menuItemStyle}
+              style={{
+                ...menuItemStyle,
+                fontSize: 12 * textScale
+              }}
             >
               💬 Открыть чат
             </button>
             <button
               onClick={handleRemoveChannelFromContextMenu}
-              style={{ ...menuItemStyle, color: '#fecaca' }}
+              style={{
+                ...menuItemStyle,
+                fontSize: 12 * textScale,
+                color: '#fecaca'
+              }}
             >
               🗑️ Удалить
             </button>
@@ -1036,7 +1116,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={contextMenuHeaderStyle}>
+            <div
+              style={{
+                ...contextMenuHeaderStyle,
+                fontSize: 12 * textScale
+              }}
+            >
               {viewerContextMenu.viewer.displayName ||
                 viewerContextMenu.viewer.login}
             </div>
@@ -1052,7 +1137,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                   viewer: null
                 });
               }}
-              style={menuItemStyle}
+              style={{
+                ...menuItemStyle,
+                fontSize: 12 * textScale
+              }}
             >
               👤 Профиль
             </button>
@@ -1066,7 +1154,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                   viewer: null
                 });
               }}
-              style={menuItemStyle}
+              style={{
+                ...menuItemStyle,
+                fontSize: 12 * textScale
+              }}
             >
               📜 Лог сообщений
             </button>
@@ -1075,7 +1166,10 @@ const Sidebar: React.FC<SidebarProps> = ({
               onClick={() =>
                 handleViewerModeration('timeout', 60)
               }
-              style={menuItemStyle}
+              style={{
+                ...menuItemStyle,
+                fontSize: 12 * textScale
+              }}
             >
               ⏱️ Таймаут 1м
             </button>
@@ -1083,20 +1177,31 @@ const Sidebar: React.FC<SidebarProps> = ({
               onClick={() =>
                 handleViewerModeration('timeout', 600)
               }
-              style={menuItemStyle}
+              style={{
+                ...menuItemStyle,
+                fontSize: 12 * textScale
+              }}
             >
               ⏱️ Таймаут 10м
             </button>
             <div style={menuDividerStyle} />
             <button
               onClick={() => handleViewerModeration('ban')}
-              style={{ ...menuItemStyle, color: '#fca5a5' }}
+              style={{
+                ...menuItemStyle,
+                fontSize: 12 * textScale,
+                color: '#fca5a5'
+              }}
             >
               ⛔ Бан
             </button>
             <button
               onClick={() => handleViewerModeration('unban')}
-              style={{ ...menuItemStyle, color: '#86efac' }}
+              style={{
+                ...menuItemStyle,
+                fontSize: 12 * textScale,
+                color: '#86efac'
+              }}
             >
               ✅ Разбан
             </button>
@@ -1111,6 +1216,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               key={t.id}
               style={{
                 ...toastStyle,
+                fontSize: 12 * textScale,
                 borderColor:
                   t.type === 'error'
                     ? '#ef4444'
@@ -1129,15 +1235,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 // =====================================================
-// ViewerRoleBadge — теперь с реальными иконками, если есть badgeSets
+// ViewerRoleBadge — с учётом fontScale
 // =====================================================
 
 const ViewerRoleBadge: React.FC<{
   role: ViewerRole;
   isBot: boolean;
   badgeSets: Record<string, Record<string, any>>;
-}> = ({ role, isBot, badgeSets }) => {
-  // Боты: отдельный бейдж
+  fontScale: number;
+}> = ({ role, isBot, badgeSets, fontScale }) => {
   if (isBot) {
     return (
       <span
@@ -1146,7 +1252,7 @@ const ViewerRoleBadge: React.FC<{
           minWidth: 14,
           height: 14,
           borderRadius: 4,
-          fontSize: 9,
+          fontSize: 9 * fontScale,
           lineHeight: '14px',
           textAlign: 'center',
           background: '#eab308',
@@ -1193,8 +1299,8 @@ const ViewerRoleBadge: React.FC<{
             alt={role}
             title={verData.title || role}
             style={{
-              width: 16,
-              height: 16,
+              width: 16 * fontScale,
+              height: 16 * fontScale,
               borderRadius: 4,
               flexShrink: 0
             }}
@@ -1204,7 +1310,6 @@ const ViewerRoleBadge: React.FC<{
     }
   }
 
-  // Fallback: цветные бейджи, как раньше
   const mapping: Record<
     ViewerRole,
     { label: string; color: string } | null
@@ -1227,7 +1332,7 @@ const ViewerRoleBadge: React.FC<{
           minWidth: 14,
           height: 14,
           borderRadius: 4,
-          fontSize: 9,
+          fontSize: 9 * fontScale,
           lineHeight: '14px',
           textAlign: 'center',
           background: info.color,
@@ -1241,7 +1346,6 @@ const ViewerRoleBadge: React.FC<{
     );
   }
 
-  // Обычный зритель без роли
   return (
     <span
       style={{
@@ -1525,14 +1629,12 @@ async function fetchChattersForChannel(
           isBot: KNOWN_BOTS.has(c.user_login.toLowerCase())
         };
       });
-      // Сортировка
       viewers.sort((a, b) => {
         const aIdx = roleOrder.indexOf(a.role);
         const bIdx = roleOrder.indexOf(b.role);
         if (aIdx !== bIdx) return aIdx - bIdx;
         return a.login.localeCompare(b.login);
       });
-      // Аватарки
       try {
         const logins = viewers.map((v) => v.login);
         const infos =
@@ -1553,7 +1655,6 @@ async function fetchChattersForChannel(
     }
   } catch (err: any) {
     console.warn('[fetchChatters] Helix error:', err);
-    // Fallback logic
     if (fallbackChatters && fallbackChatters.size > 0) {
       const viewers: ViewerEntry[] = Array.from(
         fallbackChatters.values()
@@ -1575,6 +1676,13 @@ async function fetchChattersForChannel(
     return { viewers: [], fallback: false };
   }
   return { viewers: [], fallback: false };
+}
+
+function clampAutoScale(value: number): number {
+  const min = 0.7;
+  const max = 1.5;
+  if (Number.isNaN(value)) return 1;
+  return Math.min(max, Math.max(min, value));
 }
 
 export default Sidebar;
