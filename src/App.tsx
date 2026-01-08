@@ -52,6 +52,8 @@ export interface ActiveChatter {
   displayName: string;
   color?: string;
   badges: string[];
+  badgeVersions: Record<string, string>; // setId -> version
+  badgeInfo: Record<string, string>;     // setId -> info (например, months)
   lastSeen: number;
   avatarUrl?: string | null;
   bannerUrl?: string | null;
@@ -72,9 +74,9 @@ const App: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatReady, setChatReady] = useState(false);
   const [currentUserLogin, setCurrentUserLogin] = useState<string | null>(null);
+
   const joinedRef = useRef<Set<string>>(new Set());
   const modeChangeTimestamps = useRef<Record<string, number>>({});
-  const globalUsersRef = useRef<Record<string, GlobalUserData>>({});
   const pendingSelfMessagesRef = useRef<
     Record<string, PendingSelfMessage[]>
   >({});
@@ -83,70 +85,19 @@ const App: React.FC = () => {
   const [globalUsers, setGlobalUsers] = useState<Record<string, GlobalUserData>>(
     {}
   );
-
-useEffect(() => {
-  globalUsersRef.current = globalUsers;
-}, [globalUsers]);
+  const globalUsersRef = useRef<Record<string, GlobalUserData>>({});
 
   const [activeChatters, setActiveChatters] = useState<
     Record<string, Map<string, ActiveChatter>>
   >({});
 
-// Подтягиваем доп.инфу о пользователях (аватар/баннер) через Helix
-useEffect(() => {
-  const users = Object.values(globalUsers);
-  // выбираем тех, для кого ещё нет ни аватара, ни баннера
-  const toFetch = users.filter(
-    (u) => !u.avatarUrl && !u.bannerUrl
-  );
-  if (toFetch.length === 0) return;
-
-  let cancelled = false;
-
-  const fetchInfo = async () => {
-    try {
-      const logins = Array.from(
-        new Set(toFetch.map((u) => u.login.toLowerCase()))
-      );
-      const infos =
-        await window.electronAPI.twitch.getUsersInfo(logins);
-      if (cancelled || !infos) return;
-
-      const infoMap = new Map(
-        infos.map((i: any) => [i.login.toLowerCase(), i])
-      );
-
-      setGlobalUsers((prev) => {
-        const next = { ...prev };
-        for (const [loginLower, user] of Object.entries(next)) {
-          const info = infoMap.get(loginLower);
-          if (!info) continue;
-          next[loginLower] = {
-            ...user,
-            displayName: info.displayName || user.displayName,
-            avatarUrl:
-              info.avatarUrl ?? user.avatarUrl ?? null,
-            bannerUrl:
-              info.bannerUrl ?? user.bannerUrl ?? null
-          };
-        }
-        return next;
-      });
-    } catch (err) {
-      console.warn('[App] getUsersInfo для globalUsers не удался', err);
-    }
-  };
-
-  // чуть откладываем, чтобы не спамить при бурных событиях
-  const timeoutId = setTimeout(fetchInfo, 1000);
-  return () => {
-    cancelled = true;
-    clearTimeout(timeoutId);
-  };
-}, [globalUsers]);
-
   const [userLogOpen, setUserLogOpen] = useState<UserLogData | null>(null);
   const [userProfileLogin, setUserProfileLogin] = useState<string | null>(null);
+
+  // синхронизируем ref с состоянием
+  useEffect(() => {
+    globalUsersRef.current = globalUsers;
+  }, [globalUsers]);
 
   const markModeChanged = (channel: string) => {
     modeChangeTimestamps.current[channel.toLowerCase()] = Date.now();
@@ -157,42 +108,39 @@ useEffect(() => {
   // =====================================================
 
   const handleSendMessage = async (channel: string, text: string) => {
-  const chanLower = channel.toLowerCase().trim();
-  const trimmed = text.trim();
-  if (!chanLower || !trimmed) return;
+    const chanLower = channel.toLowerCase().trim();
+    const trimmed = text.trim();
+    if (!chanLower || !trimmed) return;
 
-  try {
-    const result = await window.electronAPI.twitch.sendChatMessage(
-      chanLower,
-      trimmed
-    );
-
-    // ✅ Проверяем что result существует и имеет messageId
-    if (result && result.messageId) {
-      if (!pendingSelfMessagesRef.current[chanLower]) {
-        pendingSelfMessagesRef.current[chanLower] = [];
-      }
-      pendingSelfMessagesRef.current[chanLower].push({
-        msgId: result.messageId,
-        text: trimmed,
-        createdAt: Date.now()
-      });
-      console.log('[App] Сообщение отправлено через Helix:', result.messageId);
-    } else {
-      // Helix вернул пустой результат — используем fallback
-      console.warn('[App] Helix sendChatMessage вернул пустой результат, используем IRC');
-      await twitchChatClient.sendMessage(chanLower, trimmed);
-    }
-  } catch (err) {
-    console.error('[App] sendChatMessage через Helix не удался', err);
-    // Fallback: пробуем отправить через IRC
     try {
-      await twitchChatClient.sendMessage(chanLower, trimmed);
-    } catch (err2) {
-      console.error('[App] fallback отправка через IRC не удалась', err2);
+      const result = await window.electronAPI.twitch.sendChatMessage(
+        chanLower,
+        trimmed
+      );
+
+      if (result && result.messageId) {
+        if (!pendingSelfMessagesRef.current[chanLower]) {
+          pendingSelfMessagesRef.current[chanLower] = [];
+        }
+        pendingSelfMessagesRef.current[chanLower].push({
+          msgId: result.messageId,
+          text: trimmed,
+          createdAt: Date.now()
+        });
+        console.log('[App] Сообщение отправлено через Helix:', result.messageId);
+      } else {
+        console.warn('[App] Helix sendChatMessage вернул пустой результат, используем IRC');
+        await twitchChatClient.sendMessage(chanLower, trimmed);
+      }
+    } catch (err) {
+      console.error('[App] sendChatMessage через Helix не удался', err);
+      try {
+        await twitchChatClient.sendMessage(chanLower, trimmed);
+      } catch (err2) {
+        console.error('[App] fallback отправка через IRC не удалась', err2);
+      }
     }
-  }
-};
+  };
 
   // =====================================================
   // Лог пользователя
@@ -428,6 +376,91 @@ useEffect(() => {
   }, []);
 
   // =====================================================
+  // Подтягиваем доп.инфу о пользователях (аватар/баннер)
+  // =====================================================
+
+  useEffect(() => {
+    const users = Object.values(globalUsers);
+    const toFetch = users.filter(
+      (u) => !u.avatarUrl && !u.bannerUrl
+    );
+    if (toFetch.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchInfo = async () => {
+      try {
+        const logins = Array.from(
+          new Set(toFetch.map((u) => u.login.toLowerCase()))
+        );
+        const infos =
+          await window.electronAPI.twitch.getUsersInfo(logins);
+        if (cancelled || !infos) return;
+
+        const infoMap = new Map(
+          infos.map((i: any) => [i.login.toLowerCase(), i])
+        );
+
+        // 1) обновляем globalUsers
+        setGlobalUsers((prev) => {
+          const next = { ...prev };
+          for (const [loginLower, user] of Object.entries(next)) {
+            const info = infoMap.get(loginLower);
+            if (!info) continue;
+            next[loginLower] = {
+              ...user,
+              displayName: info.displayName || user.displayName,
+              avatarUrl:
+                info.avatarUrl ?? user.avatarUrl ?? null,
+              bannerUrl:
+                info.bannerUrl ?? user.bannerUrl ?? null
+            };
+          }
+          return next;
+        });
+
+        // 2) обновляем activeChatters, чтобы сразу появился баннер/аватар
+        setActiveChatters((prev) => {
+          const updated: Record<string, Map<string, ActiveChatter>> = {};
+
+          for (const [channel, chatters] of Object.entries(prev)) {
+            const newMap = new Map<string, ActiveChatter>();
+
+            for (const [odaterId, chatter] of chatters) {
+              const info = infoMap.get(chatter.login.toLowerCase());
+              if (!info) {
+                newMap.set(odaterId, chatter);
+                continue;
+              }
+
+              newMap.set(odaterId, {
+                ...chatter,
+                displayName: info.displayName || chatter.displayName,
+                avatarUrl:
+                  info.avatarUrl ?? chatter.avatarUrl ?? null,
+                bannerUrl:
+                  info.bannerUrl ?? chatter.bannerUrl ?? null
+              });
+            }
+
+            updated[channel] = newMap;
+          }
+
+          return updated;
+        });
+      } catch (err) {
+        console.warn('[App] getUsersInfo для globalUsers не удался', err);
+      }
+    };
+
+    const timeoutId = setTimeout(fetchInfo, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [globalUsers]);
+
+  // =====================================================
   // Инициализация чат-клиента
   // =====================================================
 
@@ -442,9 +475,8 @@ useEffect(() => {
           return;
         }
 
-		setCurrentUserLogin(user.login.toLowerCase());
-
-currentUserLoginRef.current = user.login.toLowerCase();
+        setCurrentUserLogin(user.login.toLowerCase());
+        currentUserLoginRef.current = user.login.toLowerCase();
 
         let token = await window.electronAPI.config.get(
           'twitch.accessToken'
@@ -475,7 +507,6 @@ currentUserLoginRef.current = user.login.toLowerCase();
         twitchChatClient.onMessage(({ channel, message, tags, self }) => {
           const chanLower = channel.toLowerCase();
 
-          // Привязка Helix message_id к self-сообщению без id
           if (self && !tags.id) {
             const queue = pendingSelfMessagesRef.current[chanLower];
             if (queue && queue.length > 0) {
@@ -507,28 +538,24 @@ currentUserLoginRef.current = user.login.toLowerCase();
             }
           }
 
-const selfLogin = currentUserLoginRef.current;
-const mentionedSelf =
-  !!selfLogin &&
-  message.toLowerCase().includes('@' + selfLogin);
+          const selfLogin = currentUserLoginRef.current;
+          const mentionedSelf =
+            !!selfLogin &&
+            message.toLowerCase().includes('@' + selfLogin);
 
-const msg = buildChatMessage(
-  channel,
-  message,
-  tags,
-  self,
-  mentionedSelf
-);
-
-if (mentionedSelf) {
-  console.log('[App] Упоминание себя в сообщении:', {
-    channel: chanLower,
-    text: message
-  });
-}
+          const msg = buildChatMessage(
+            channel,
+            message,
+            tags,
+            self,
+            mentionedSelf
+          );
 
           const loginLower = (tags.username || '').toLowerCase();
           const odaterId = tags['user-id'] || loginLower;
+const badgeVersions: Record<string, string> = tags.badges || {};
+const badgeInfo: Record<string, string> = tags['badge-info'] || {};
+const badgesArray = Object.keys(badgeVersions);
 
           setChatPanes((prev) =>
             prev.map((p) => {
@@ -556,7 +583,9 @@ if (mentionedSelf) {
               color: tags.color,
               badges: Object.keys(tags.badges || {}),
               messages: [],
-              lastSeen: Date.now()
+              lastSeen: Date.now(),
+              avatarUrl: null,
+              bannerUrl: null
             };
 
             const newMessage: UserLogMessage = {
@@ -587,10 +616,8 @@ if (mentionedSelf) {
               }
             };
           });
-		  
-		  
 
-            setActiveChatters((prev) => {
+setActiveChatters((prev) => {
   const channelChatters = new Map(prev[chanLower] || []);
 
   const userData = globalUsersRef.current[loginLower];
@@ -601,21 +628,16 @@ if (mentionedSelf) {
     displayName:
       tags['display-name'] || tags.username || '',
     color: tags.color,
-    badges: Object.keys(tags.badges || {}),
+    badges: badgesArray,
+    badgeVersions,
+    badgeInfo,
     lastSeen: Date.now(),
     avatarUrl: userData?.avatarUrl ?? null,
     bannerUrl: userData?.bannerUrl ?? null
   });
 
-  console.log('[App] activeChatters обновлён:', {
-    channel: chanLower,
-    newCount: channelChatters.size
-  });
-
   return { ...prev, [chanLower]: channelChatters };
 });
-		  
-		  
         });
 
         // Удаление одного сообщения
@@ -634,7 +656,6 @@ if (mentionedSelf) {
               prev.map((p) => {
                 if (p.channel.toLowerCase() !== chanLower) return p;
 
-                // Полная очистка чата
                 if (!targetUserId && !targetLogin) {
                   const systemMsg: ChatMessage = {
                     id: `sys-${Date.now()}-${Math.random()}`,
@@ -662,7 +683,6 @@ if (mentionedSelf) {
                   };
                 }
 
-                // Бан/таймаут конкретного пользователя
                 const mark = (m: ChatMessage) => {
                   if (m.deleted) return m;
                   if (targetUserId && m.userId === targetUserId)
@@ -685,7 +705,6 @@ if (mentionedSelf) {
               })
             );
 
-            // Глобальное хранилище при бане юзера
             if (targetLogin) {
               const loginLower = targetLogin.toLowerCase();
               setGlobalUsers((prev) => {
@@ -771,7 +790,7 @@ if (mentionedSelf) {
                 ...base,
                 followers: followersEnabled,
                 followersDuration,
-                shield: existing.shield // shield обновляется через Helix
+                shield: existing.shield
               }
             };
           });
@@ -1099,7 +1118,6 @@ function buildChatMessage(
       : Date.now(),
     emotes: tags.emotes,
     deleted: false,
-    // НОВОЕ:
     mentionedSelf: mentionedSelf ?? false
   };
 }

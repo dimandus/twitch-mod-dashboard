@@ -23,6 +23,8 @@ interface ViewerEntry {
   displayName?: string | null;
   bannerUrl?: string | null;
   badges?: string[];
+  badgeVersions?: Record<string, string>;
+  badgeInfo?: Record<string, string>;
   lastSeen?: number;
   isFromFallback?: boolean;
 }
@@ -159,7 +161,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     );
   };
 
-  // Загрузка сохранённых каналов
+  // Сохранённые каналы
   useEffect(() => {
     (async () => {
       try {
@@ -173,7 +175,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     })();
   }, []);
 
-  // Загрузка списка мод-каналов (для фильтра "Где я мод")
+  // Мод-каналы для фильтра
   useEffect(() => {
     (async () => {
       try {
@@ -193,7 +195,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     })();
   }, []);
 
-  // Загрузка глобальных бейджей через Helix
+  // Глобальные бейджи
   useEffect(() => {
     (async () => {
       try {
@@ -217,7 +219,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     })();
   }, []);
 
-  // авто‑масштаб от размера окна
+  // Авто-скейл от окна
   useEffect(() => {
     const BASE_WIDTH = 1920;
     const BASE_HEIGHT = 1080;
@@ -235,7 +237,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('resize', updateAutoScale);
   }, []);
 
-  // Закрытие контекстных меню — только по клику
+  // Закрытие контекстных меню только по клику
   useEffect(() => {
     const close = () => {
       setChannelContextMenu((prev) =>
@@ -566,7 +568,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     });
   };
 
-  // Фильтрация каналов и определение "модерский" канал
+  // Фильтрация каналов и мод-режим
   const moderatedSet = new Set(
     moderatedLogins.map((l) => l.toLowerCase())
   );
@@ -937,8 +939,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                           const hasModBadge =
                             (v.badges || []).some(
                               (b) =>
-                                b.toLowerCase() === 'broadcaster' ||
-                                b.toLowerCase() === 'moderator'
+                                b.toLowerCase().startsWith('broadcaster') ||
+                                b.toLowerCase().startsWith('moderator')
                             );
 
                           const isModOrBroadcastor =
@@ -1024,13 +1026,44 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     }}
                                   />
                                 )}
-                                <ViewerRoleBadge
-                                  role={v.role}
-                                  isBot={v.isBot}
-                                  badges={v.badges}
-                                  badgeSets={badgeSets}
-                                  fontScale={textScale}
-                                />
+
+                                {/* Bot бейдж, если нужно явно подсветить */}
+                                {v.isBot && (
+                                  <span
+                                    title="Bot"
+                                    style={{
+                                      minWidth: 14,
+                                      height: 14,
+                                      borderRadius: 4,
+                                      fontSize: 9 * textScale,
+                                      lineHeight: '14px',
+                                      textAlign: 'center',
+                                      background: '#eab308',
+                                      color: '#020617',
+                                      fontWeight: 700,
+                                      padding: '0 2px'
+                                    }}
+                                  >
+                                    B
+                                  </span>
+                                )}
+
+                                {/* Бейджи как в чате */}
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 2
+                                  }}
+                                >
+                                  {renderBadges(
+                                    v.badges || [],
+                                    v.badgeVersions,
+                                    v.badgeInfo,
+                                    badgeSets
+                                  )}
+                                </div>
+
                                 <span
                                   style={{
                                     overflow: 'hidden',
@@ -1295,159 +1328,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 // =====================================================
-// ViewerRoleBadge — с учётом fontScale и badges
-// =====================================================
-
-const ViewerRoleBadge: React.FC<{
-  role: ViewerRole;
-  isBot: boolean;
-  badges?: string[];
-  badgeSets: Record<string, Record<string, any>>;
-  fontScale: number;
-}> = ({ role, isBot, badges, badgeSets, fontScale }) => {
-  if (isBot) {
-    return (
-      <span
-        title="Bot"
-        style={{
-          minWidth: 14,
-          height: 14,
-          borderRadius: 4,
-          fontSize: 9 * fontScale,
-          lineHeight: '14px',
-          textAlign: 'center',
-          background: '#eab308',
-          color: '#020617',
-          fontWeight: 700,
-          padding: '0 2px'
-        }}
-      >
-        B
-      </span>
-    );
-  }
-
-  const roleToSetId: Record<ViewerRole, string | null> = {
-    broadcaster: 'broadcaster',
-    moderator: 'moderator',
-    vip: 'vip',
-    staff: 'staff',
-    admin: 'admin',
-    global_mod: 'global_mod',
-    viewer: null
-  };
-
-  // выбираем setId по приоритету из badges, если есть
-  const priority = [
-    'broadcaster',
-    'moderator',
-    'vip',
-    'subscriber',
-    'staff',
-    'admin',
-    'global_mod'
-  ];
-
-  let setId: string | null = null;
-
-  if (badges && badges.length > 0) {
-    for (const p of priority) {
-      if (badges.some((b) => b.toLowerCase().startsWith(p))) {
-        setId = p;
-        break;
-      }
-    }
-  }
-
-  if (!setId) {
-    setId = roleToSetId[role];
-  }
-
-  if (
-    setId &&
-    badgeSets &&
-    Object.keys(badgeSets).length > 0 &&
-    badgeSets[setId]
-  ) {
-    const versions = badgeSets[setId];
-    const verData =
-      versions['1'] || (Object.values(versions)[0] as any);
-    if (verData) {
-      const url =
-        verData.image_url_1x ||
-        verData.image_url_2x ||
-        verData.image_url_4x;
-      if (url) {
-        return (
-          <img
-            src={url}
-            alt={setId}
-            title={verData.title || setId}
-            style={{
-              width: 16 * fontScale,
-              height: 16 * fontScale,
-              borderRadius: 4,
-              flexShrink: 0
-            }}
-          />
-        );
-      }
-    }
-  }
-
-  // text fallback
-  const mapping: Record<
-    string,
-    { label: string; color: string }
-  > = {
-    broadcaster: { label: 'S', color: '#a855f7' },
-    moderator: { label: 'M', color: '#22c55e' },
-    vip: { label: 'V', color: '#ec4899' },
-    subscriber: { label: 'Sub', color: '#f97316' },
-    staff: { label: 'T', color: '#f97316' },
-    admin: { label: 'T', color: '#f97316' },
-    global_mod: { label: 'T', color: '#f97316' }
-  };
-
-  const info = setId ? mapping[setId] : null;
-  if (info) {
-    return (
-      <span
-        title={setId || ''}
-        style={{
-          minWidth: 14,
-          height: 14,
-          borderRadius: 4,
-          fontSize: 9 * fontScale,
-          lineHeight: '14px',
-          textAlign: 'center',
-          background: info.color,
-          color: '#020617',
-          fontWeight: 700,
-          padding: '0 2px'
-        }}
-      >
-        {info.label}
-      </span>
-    );
-  }
-
-  // обычный зритель без явных бейджей
-  return (
-    <span
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: '999px',
-        background: '#4b5563',
-        display: 'inline-block'
-      }}
-    />
-  );
-};
-
-// =====================================================
-// Styles
+// Styles & helpers (в том числе рендер бейджей)
 // =====================================================
 
 const activityDotStyle = (progress: number): React.CSSProperties => {
@@ -1704,9 +1585,117 @@ const toastStyle: React.CSSProperties = {
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
 };
 
-// =====================================================
-// Helpers
-// =====================================================
+// ====== рендер бейджей — как в ChatArea ======
+
+function badgeTitle(setId: string, months?: string): string {
+  switch (setId) {
+    case 'broadcaster':
+      return 'Стример';
+    case 'moderator':
+      return 'Модератор';
+    case 'vip':
+      return 'VIP';
+    case 'subscriber':
+      return months ? `Подписчик (${months} мес.)` : 'Подписчик';
+    case 'staff':
+      return 'Twitch Staff';
+    case 'admin':
+      return 'Twitch Admin';
+    case 'global_mod':
+      return 'Global Moderator';
+    default:
+      return setId;
+  }
+}
+
+function renderBadges(
+  badges: string[],
+  badgeVersions?: Record<string, string>,
+  badgeInfo?: Record<string, string>,
+  badgeSets?: Record<string, Record<string, any>>
+): React.ReactNode {
+  if (!badges.length) return null;
+
+  // 1) Если badgeSets есть (Helix отдал глобальные бейджи) — рисуем картинки
+  if (badgeSets && Object.keys(badgeSets).length > 0) {
+    return badges.map((setId, i) => {
+      const set = badgeSets[setId];
+      if (!set) return null;
+
+      const versionId = badgeVersions?.[setId] || '1';
+      const verData = set[versionId] || Object.values(set)[0];
+
+      if (!verData) return null;
+
+      const url =
+        verData.image_url_1x ||
+        verData.image_url_2x ||
+        verData.image_url_4x;
+      if (!url) return null;
+
+      const months = badgeInfo?.[setId];
+      const title =
+        verData.title || badgeTitle(setId, months);
+
+      return (
+        <img
+          key={setId + i}
+          src={url}
+          alt={setId}
+          title={title}
+          style={{
+            width: 16,
+            height: 16,
+            marginRight: 2,
+            flexShrink: 0
+          }}
+        />
+      );
+    });
+  }
+
+  // 2) Фолбэк: текстовые бейджи
+  const mapping: Record<string, { label: string; color: string }> = {
+    broadcaster: { label: 'S', color: '#a855f7' },
+    moderator: { label: 'M', color: '#22c55e' },
+    vip: { label: 'V', color: '#0ea5e9' },
+    subscriber: { label: 'Sub', color: '#f97316' },
+    staff: { label: 'T', color: '#f97316' },
+    admin: { label: 'T', color: '#f97316' },
+    global_mod: { label: 'T', color: '#f97316' }
+  };
+
+  return badges.map((setId, i) => {
+    const info = mapping[setId];
+    if (!info) return null;
+
+    const months = badgeInfo?.[setId];
+    const title = badgeTitle(setId, months);
+
+    return (
+      <span
+        key={setId + i}
+        title={title}
+        style={{
+          minWidth: 14,
+          height: 14,
+          borderRadius: 4,
+          fontSize: 9,
+          lineHeight: '14px',
+          textAlign: 'center',
+          background: info.color,
+          color: '#020617',
+          fontWeight: 700,
+          padding: '0 2px',
+          marginRight: 2,
+          flexShrink: 0
+        }}
+      >
+        {info.label}
+      </span>
+    );
+  });
+}
 
 async function fetchChattersForChannel(
   channelLogin: string,
@@ -1717,7 +1706,6 @@ async function fetchChattersForChannel(
 
   let helixViewers: ViewerEntry[] | null = null;
 
-  // 1. Пытаемся получить зрителей через Helix
   try {
     const result =
       await window.electronAPI.twitch.getChannelChatters(login);
@@ -1778,7 +1766,6 @@ async function fetchChattersForChannel(
     return { viewers: helixViewers, fallback: false };
   }
 
-  // 2. Fallback: activeChatters из App (последние 5 минут)
   if (fallbackChatters && fallbackChatters.size > 0) {
     const now = Date.now();
 
@@ -1789,9 +1776,9 @@ async function fetchChattersForChannel(
       const badgeIds = (c.badges || []).map((b) =>
         b.toLowerCase()
       );
-      if (badgeIds.includes('broadcaster')) role = 'broadcaster';
-      else if (badgeIds.includes('moderator')) role = 'moderator';
-      else if (badgeIds.includes('vip')) role = 'vip';
+      if (badgeIds.some((b) => b.startsWith('broadcaster'))) role = 'broadcaster';
+      else if (badgeIds.some((b) => b.startsWith('moderator'))) role = 'moderator';
+      else if (badgeIds.some((b) => b.startsWith('vip'))) role = 'vip';
 
       return {
         odaterId: c.odaterId,
@@ -1802,6 +1789,8 @@ async function fetchChattersForChannel(
         avatarUrl: c.avatarUrl ?? null,
         bannerUrl: c.bannerUrl ?? null,
         badges: c.badges || [],
+        badgeVersions: c.badgeVersions,
+        badgeInfo: c.badgeInfo,
         lastSeen:
           typeof c.lastSeen === 'number' ? c.lastSeen : now,
         isFromFallback: true
