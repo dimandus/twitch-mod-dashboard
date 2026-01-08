@@ -70,6 +70,7 @@ type ChannelFilter = 'all' | 'mod';
 
 interface SidebarProps {
   collapsed: boolean;
+  selectedChannel: string | null;
   onToggleCollapse: () => void;
   onChannelSelected: (channel: string | null) => void;
   onRemoveChannelFromApp: (channel: string) => void;
@@ -87,6 +88,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({
   collapsed,
+  selectedChannel,
   onToggleCollapse,
   onChannelSelected,
   onRemoveChannelFromApp,
@@ -98,7 +100,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   globalScale
 }) => {
   const [channels, setChannels] = useState<string[]>([]);
-  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
 
   const [viewers, setViewers] = useState<ViewerEntry[]>([]);
   const [viewersLoading, setViewersLoading] = useState(false);
@@ -338,10 +339,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [channels]);
 
   // Выбор канала
-  const handleSelectChannel = (channelLogin: string) => {
-    setSelectedChannel(channelLogin);
-    onChannelSelected(channelLogin);
-  };
+const handleSelectChannel = (channelLogin: string) => {
+  onChannelSelected(channelLogin);
+};
 
   // Добавление канала
   const openAddChannel = () => {
@@ -449,12 +449,11 @@ const Sidebar: React.FC<SidebarProps> = ({
       await window.electronAPI.config.set('settings.channels', updated);
     } catch {}
 
-    if (selectedChannel?.toLowerCase() === lower) {
-      setSelectedChannel(null);
-      setViewers([]);
-      setViewersError(null);
-      onChannelSelected(null);
-    }
+if (selectedChannel?.toLowerCase() === lower) {
+  setViewers([]);
+  setViewersError(null);
+  onChannelSelected(null);
+}
 
     onRemoveChannelFromApp(login);
   };
@@ -467,12 +466,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     try {
       await window.electronAPI.config.set('settings.channels', []);
     } catch {}
-    if (selectedChannel) {
-      setSelectedChannel(null);
-      setViewers([]);
-      setViewersError(null);
-      onChannelSelected(null);
-    }
+if (selectedChannel) {
+  setViewers([]);
+  setViewersError(null);
+  onChannelSelected(null);
+}
     prevList.forEach((login) => onRemoveChannelFromApp(login));
   };
 

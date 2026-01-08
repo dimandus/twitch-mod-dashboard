@@ -106,7 +106,8 @@ interface ChatAreaProps {
   onModeToggle: (channel: string, mode: ChatModeKey, value?: number) => void;
   onOpenUserLog: (userLogin: string) => void;
   onOpenUserProfile: (userLogin: string) => void;
-
+  onSelectChannel: (channel: string) => void;
+  
   // Глобальные скейлы
   fontScale: number;
   globalScale: number;
@@ -135,7 +136,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   fontScale,
   globalScale,
   onFontScaleChange,
-  onGlobalScaleChange
+  onGlobalScaleChange,
+  onSelectChannel
 }) => {
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -671,6 +673,7 @@ useEffect(() => {
               <div
                 key={pane.id}
                 draggable
+				onClick={() => onSelectChannel(pane.channel)}
                 onDragStart={(e) => handlePaneDragStart(e, pane.id)}
                 onDragOver={handlePaneDragOver}
                 onDrop={(e) => handlePaneDrop(e, pane.id)}

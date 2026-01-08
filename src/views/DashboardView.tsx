@@ -483,6 +483,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     >
       <Sidebar
         collapsed={sidebarCollapsed}
+		selectedChannel={selectedChannel}
         onToggleCollapse={toggleSidebar}
         onChannelSelected={setSelectedChannel}
         onRemoveChannelFromApp={handleChannelRemovedGlobally}
@@ -512,6 +513,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         globalScale={globalScale}
         onFontScaleChange={handleFontScaleChange}
         onGlobalScaleChange={handleGlobalScaleChange}
+		onSelectChannel={(ch) => setSelectedChannel(ch)}
       />
     </div>
   );
