@@ -172,6 +172,48 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // авто‑масштаб от размера окна
   const [autoScale, setAutoScale] = useState(1);
 
+// Загрузка настроек раскладки (строки / размер панелей)
+useEffect(() => {
+  (async () => {
+    try {
+      const [storedRows, storedWidth, storedHeight] = await Promise.all([
+        window.electronAPI.config.get('ui.chat.rows'),
+        window.electronAPI.config.get('ui.chat.paneWidth'),
+        window.electronAPI.config.get('ui.chat.paneHeight')
+      ]);
+
+      if (storedRows === 1 || storedRows === 2) {
+        setRows(storedRows);
+      }
+
+      if (typeof storedWidth === 'number') {
+        setPaneWidth((prev) => clampWidth(storedWidth));
+      }
+
+      if (typeof storedHeight === 'number') {
+        setPaneHeight((prev) => clampHeight(storedHeight));
+      }
+    } catch (err) {
+      console.warn('[ChatArea] не удалось загрузить настройки раскладки', err);
+    }
+  })();
+}, []);
+
+// Сохранение раскладки при изменении
+useEffect(() => {
+  (async () => {
+    try {
+      await Promise.all([
+        window.electronAPI.config.set('ui.chat.rows', rows),
+        window.electronAPI.config.set('ui.chat.paneWidth', paneWidth),
+        window.electronAPI.config.set('ui.chat.paneHeight', paneHeight)
+      ]);
+    } catch (err) {
+      console.warn('[ChatArea] не удалось сохранить настройки раскладки', err);
+    }
+  })();
+}, [rows, paneWidth, paneHeight]);
+
   // Загрузка глобальных бейджей через Helix
   useEffect(() => {
     (async () => {

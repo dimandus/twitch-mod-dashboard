@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ChatArea, {
   ChatPane,
   ModerationAction
@@ -36,12 +36,11 @@ const defaultModes: ChatModes = {
   shield: false
 };
 
-function clampUserScale(value: number): number {
-  const min = 0.7;
-  const max = 1.5;
-  if (Number.isNaN(value)) return 1;
-  return Math.min(max, Math.max(min, value));
-}
+// Значения по умолчанию для границ масштабирования
+const DEFAULT_FONT_MIN = 0.7;
+const DEFAULT_FONT_MAX = 1.5;
+const DEFAULT_GLOBAL_MIN = 0.7;
+const DEFAULT_GLOBAL_MAX = 1.5;
 
 interface DashboardViewProps {
   chatPanes: ChatPane[];
@@ -87,17 +86,89 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   activeChatters,
   onSendMessage
 }) => {
-  // Глобальные множители шрифтов/размеров
+  // Текущие множители шрифта / глобального UI
   const [fontScale, setFontScale] = useState(1);
   const [globalScale, setGlobalScale] = useState(1);
 
+  // Границы из настроек
+  const [fontScaleMin, setFontScaleMin] = useState(DEFAULT_FONT_MIN);
+  const [fontScaleMax, setFontScaleMax] = useState(DEFAULT_FONT_MAX);
+  const [globalScaleMin, setGlobalScaleMin] = useState(DEFAULT_GLOBAL_MIN);
+  const [globalScaleMax, setGlobalScaleMax] = useState(DEFAULT_GLOBAL_MAX);
+
+  // Хелпер клэмпа с учётом границ
+  const clamp = (value: number, min: number, max: number) => {
+    if (Number.isNaN(value)) return min;
+    return Math.min(max, Math.max(min, value));
+  };
+
   const handleFontScaleChange = (next: number) => {
-    setFontScale(clampUserScale(next));
+    setFontScale((prev) => clamp(next, fontScaleMin, fontScaleMax));
   };
 
   const handleGlobalScaleChange = (next: number) => {
-    setGlobalScale(clampUserScale(next));
+    setGlobalScale((prev) => clamp(next, globalScaleMin, globalScaleMax));
   };
+
+  // Загрузка UI-настроек при старте
+  useEffect(() => {
+    (async () => {
+      try {
+        const [
+          storedFont,
+          storedGlobal,
+          fsMinStored,
+          fsMaxStored,
+          gsMinStored,
+          gsMaxStored
+        ] = await Promise.all([
+          window.electronAPI.config.get('ui.chat.fontScale'),
+          window.electronAPI.config.get('ui.chat.globalScale'),
+          window.electronAPI.config.get('ui.chat.fontScaleMin'),
+          window.electronAPI.config.get('ui.chat.fontScaleMax'),
+          window.electronAPI.config.get('ui.chat.globalScaleMin'),
+          window.electronAPI.config.get('ui.chat.globalScaleMax')
+        ]);
+
+        // 1) границы
+        const fsMin =
+          typeof fsMinStored === 'number' ? fsMinStored : DEFAULT_FONT_MIN;
+        const fsMax =
+          typeof fsMaxStored === 'number' ? fsMaxStored : DEFAULT_FONT_MAX;
+        const gsMin =
+          typeof gsMinStored === 'number' ? gsMinStored : DEFAULT_GLOBAL_MIN;
+        const gsMax =
+          typeof gsMaxStored === 'number' ? gsMaxStored : DEFAULT_GLOBAL_MAX;
+
+        setFontScaleMin(fsMin);
+        setFontScaleMax(fsMax);
+        setGlobalScaleMin(gsMin);
+        setGlobalScaleMax(gsMax);
+
+        // 2) сами значения скейла, с учётом свежих границ
+        if (typeof storedFont === 'number') {
+          setFontScale(clamp(storedFont, fsMin, fsMax));
+        }
+        if (typeof storedGlobal === 'number') {
+          setGlobalScale(clamp(storedGlobal, gsMin, gsMax));
+        }
+      } catch (err) {
+        console.warn('[DashboardView] не удалось загрузить UI-настройки', err);
+      }
+    })();
+  }, []);
+
+  // Сохранение текущих значений скейла при изменении
+  useEffect(() => {
+    (async () => {
+      try {
+        await window.electronAPI.config.set('ui.chat.fontScale', fontScale);
+        await window.electronAPI.config.set('ui.chat.globalScale', globalScale);
+      } catch (err) {
+        console.warn('[DashboardView] не удалось сохранить UI-scale', err);
+      }
+    })();
+  }, [fontScale, globalScale]);
 
   const toggleSidebar = () =>
     setSidebarCollapsed((v) => !v);
