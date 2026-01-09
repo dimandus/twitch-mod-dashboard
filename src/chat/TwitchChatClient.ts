@@ -65,7 +65,7 @@ export class TwitchChatClient {
 
     const client = new tmi.Client({
       options: {
-        debug: false,
+        debug: true, // ВКЛЮЧЕН ДЕБАГ
         skipUpdatingEmotesets: true
       },
       connection: {
@@ -94,26 +94,25 @@ export class TwitchChatClient {
     });
 
     client.on('message', (chan, tags, msg, self) => {
-  const loginChan = normalizeChannel(chan);
+      const loginChan = normalizeChannel(chan);
 
-  console.log('[TMI message]', {
-    rawChannel: chan,
-    channel: loginChan,
-    self,
-    msg,
-    tags
-  });
+      console.log('[TMI message]', {
+        rawChannel: chan,
+        channel: loginChan,
+        self,
+        msg,
+        tags
+      });
 
-  if (self && !tags.username) {
-    tags.username = this.currentUsername;
-  }
+      if (self && !tags.username) {
+        tags.username = this.currentUsername;
+      }
 
-  for (const h of this.messageHandlers) {
-    h({ channel: loginChan, message: msg, tags, self });
-  }
-});
+      for (const h of this.messageHandlers) {
+        h({ channel: loginChan, message: msg, tags, self });
+      }
+    });
 
-    // Удаление конкретного сообщения (CLEARMSG)
     client.on('clearmsg', (chan, tags) => {
       const loginChan = normalizeChannel(chan);
       const msgId = tags['target-msg-id'];
@@ -123,11 +122,8 @@ export class TwitchChatClient {
       }
     });
 
-    // CLEARCHAT: полная очистка чата или бан/таймаут пользователя
     client.on('clearchat', (chan, username, tags) => {
       const loginChan = normalizeChannel(chan);
-
-      // ВАЖНО: tags может быть undefined при полной очистке
       const t = (tags as any) || {};
       const targetUserId = t['target-user-id'] as string | undefined;
       const banDuration = t['ban-duration']
@@ -144,7 +140,6 @@ export class TwitchChatClient {
       }
     });
 
-    // Roomstate
     client.on('roomstate', (chan, state) => {
       const loginChan = normalizeChannel(chan);
       for (const h of this.roomStateHandlers) {
@@ -152,12 +147,29 @@ export class TwitchChatClient {
       }
     });
 
-    // Notice
     client.on('notice', (chan, msgId, message) => {
       const loginChan = normalizeChannel(chan);
+      console.log('[TMI NOTICE]', { channel: loginChan, msgId, message });
       for (const h of this.noticeHandlers) {
         h({ channel: loginChan, msgId, message });
       }
+    });
+
+    // ===== ДОПОЛНИТЕЛЬНЫЕ ЛОГИ =====
+    client.on('join', (chan, username, self) => {
+      console.log('[TMI JOIN]', { channel: normalizeChannel(chan), username, self });
+    });
+    client.on('part', (chan, username, self) => {
+      console.log('[TMI PART]', { channel: normalizeChannel(chan), username, self });
+    });
+    client.on('error', (err) => {
+      console.error('[TMI ERROR]', err);
+    });
+    client.on('raw_message', (msgCloned, msg) => {
+      console.log('[TMI RAW]', msgCloned);
+    });
+    client.on('data', (data) => {
+      console.log('[TMI DATA]', data);
     });
 
     await client.connect();
@@ -175,6 +187,8 @@ export class TwitchChatClient {
     if (this.joinedChannels.has(login)) return;
     await this.client.join(login);
     this.joinedChannels.add(login);
+    console.log('[TMI] joined', login);
+    console.log('[TMI] getChannels:', this.client.getChannels());
   }
 
   async partChannel(channelLogin: string): Promise<void> {
@@ -189,15 +203,19 @@ export class TwitchChatClient {
     this.joinedChannels.delete(login);
   }
 
-  // Сейчас UI отправляет через Helix, но этот метод оставляем как fallback
   async sendMessage(channelLogin: string, text: string): Promise<void> {
     if (!this.client) throw new Error('TwitchChatClient: клиент не подключен');
     const login = channelLogin.toLowerCase().trim();
     const msg = text.trim();
     if (!login || !msg) return;
-    if (isDeprecatedModCommand(msg)) {
-      console.warn('Команда IRC устарела:', msg.split(' ')[0]);
+
+    if (!this.joinedChannels.has(login)) {
+      await this.joinChannel(login);
     }
+
+    console.log('[TMI] getChannels:', this.client.getChannels());
+    console.log('[TMI] sendMessage:', { login, msg });
+
     await this.client.say(login, msg);
   }
 

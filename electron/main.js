@@ -942,15 +942,6 @@ async function fetchUserEmotesHelix() {
       const res = await helixFetch(url.toString());
       const json = await res.json();
 
-      console.log(
-        '[Emotes:user] page status',
-        res.status,
-        'count',
-        Array.isArray(json.data) ? json.data.length : 0,
-        'cursor',
-        json.pagination?.cursor || null
-      );
-
       if (!res.ok) {
         throw new Error(json?.message || 'Failed to fetch user emotes');
       }

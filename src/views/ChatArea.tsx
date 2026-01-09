@@ -92,6 +92,25 @@ const FOLLOWERS_MODE_OPTIONS = [
   { label: '1мес', value: 43200 }
 ];
 
+const TWITCH_COMMANDS = [
+  { name: '/me', desc: 'Цветной текст' },
+  { name: '/clear', desc: 'Очистить чат' },
+  { name: '/slow', desc: 'Включить slowmode' },
+  { name: '/slowoff', desc: 'Выключить slowmode' },
+  { name: '/followers', desc: 'Только для фолловеров' },
+  { name: '/followersoff', desc: 'Отключить только для фолловеров' },
+  { name: '/subscribers', desc: 'Только для подписчиков' },
+  { name: '/subscribersoff', desc: 'Отключить только для подписчиков' },
+  { name: '/emoteonly', desc: 'Только эмодзи' },
+  { name: '/emoteonlyoff', desc: 'Отключить только эмодзи' },
+  { name: '/ban', desc: 'Бан пользователя' },
+  { name: '/timeout', desc: 'Таймаут пользователя' },
+  { name: '/unban', desc: 'Разбан пользователя' },
+  { name: '/announce', desc: 'Объявление' },
+  { name: '/uniquechat', desc: 'Уникальные сообщения' },
+  { name: '/uniquechatoff', desc: 'Отключить уникальные сообщения' }
+];
+
 interface ChatAreaProps {
   selectedChannel: string | null;
   chatPanes: ChatPane[];
@@ -182,6 +201,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   } | null>(null);
 
   const [badgeSets, setBadgeSets] = useState<Record<string, Record<string, any>>>({});
+
+const [commandState, setCommandState] = useState<{
+  paneId: string;
+  query: string;
+  suggestions: typeof TWITCH_COMMANDS;
+  selectedIndex: number;
+  slashIndex: number;
+} | null>(null);
 
   // масштабирование
   const [autoScale, setAutoScale] = useState(1);
@@ -469,6 +496,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const handleInputChange = (id: string, value: string) => {
     setInputValues((p) => ({ ...p, [id]: value }));
     updateMentionSuggestions(id, value);
+	updateCommandSuggestions(id, value);
   };
 
   const handleSend = (pane: ChatPane) => {
@@ -478,6 +506,39 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     setInputValues((p) => ({ ...p, [pane.id]: '' }));
     setMentionState((prev) => (prev?.paneId === pane.id ? null : prev));
   };
+
+const updateCommandSuggestions = (paneId: string, value: string) => {
+  const slashIndex = value.indexOf('/');
+  if (slashIndex !== 0) {
+    setCommandState(null);
+    return;
+  }
+
+  // Если после команды уже есть пробел и что-то ещё — не показываем подсказку
+  const firstSpace = value.indexOf(' ');
+  if (firstSpace > 0) {
+    setCommandState(null);
+    return;
+  }
+
+  const query = value.slice(1).toLowerCase();
+  const suggestions = TWITCH_COMMANDS.filter((cmd) =>
+    cmd.name.slice(1).startsWith(query)
+  );
+
+  if (suggestions.length === 0) {
+    setCommandState(null);
+    return;
+  }
+
+  setCommandState({
+    paneId,
+    query,
+    suggestions,
+    selectedIndex: 0,
+    slashIndex
+  });
+};
 
   const updateMentionSuggestions = (paneId: string, value: string) => {
     const atIndex = value.lastIndexOf('@');
@@ -591,11 +652,62 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       }
     }
 
+  if (commandState && commandState.paneId === pane.id) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setCommandState((prev) =>
+        !prev
+          ? null
+          : {
+              ...prev,
+              selectedIndex:
+                (prev.selectedIndex + 1) %
+                prev.suggestions.length
+            }
+      );
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setCommandState((prev) =>
+        !prev
+          ? null
+          : {
+              ...prev,
+              selectedIndex:
+                (prev.selectedIndex - 1 + prev.suggestions.length) %
+                prev.suggestions.length
+            }
+      );
+      return;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      applyCommandSuggestion(pane.id);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setCommandState(null);
+      return;
+    }
+  }
+
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSend(pane);
     }
   };
+
+const applyCommandSuggestion = (paneId: string) => {
+  setCommandState((prev) => {
+    if (!prev || prev.paneId !== paneId) return prev;
+    const { suggestions, selectedIndex } = prev;
+    const cmd = suggestions[selectedIndex].name;
+    setInputValues((p) => ({ ...p, [paneId]: cmd + ' ' }));
+    return null;
+  });
+};
 
   const insertEmoteToInput = (paneId: string, code: string) => {
     incrementEmoteUsage(code);
@@ -1195,6 +1307,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     ))}
                   </div>
                 )}
+
+{commandState && commandState.paneId === pane.id && (
+  <div style={commandBoxStyle}>
+    {commandState.suggestions.map((cmd, idx) => (
+      <div
+        key={cmd.name}
+        style={commandItemStyle(idx === commandState.selectedIndex)}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setCommandState((prev) =>
+            prev ? { ...prev, selectedIndex: idx } : prev
+          );
+          applyCommandSuggestion(pane.id);
+        }}
+      >
+        <span style={{ fontWeight: 600 }}>{cmd.name}</span>
+        <span style={{ color: '#9ca3af', marginLeft: 8, fontSize: 11 }}>
+          {cmd.desc}
+        </span>
+      </div>
+    ))}
+  </div>
+)}
 
                 {/* ПИКЕР ЭМОТОВ */}
                 {emotePicker && emotePicker.paneId === pane.id && (
@@ -1811,6 +1946,30 @@ const emoteButtonStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center'
 };
+
+const commandBoxStyle: React.CSSProperties = {
+  position: 'absolute',
+  bottom: 72,
+  left: 6,
+  right: 6,
+  maxHeight: 150,
+  overflowY: 'auto',
+  background: '#111827',
+  border: '1px solid #374151',
+  borderRadius: 6,
+  zIndex: 2100,
+  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+  fontSize: 12
+};
+
+const commandItemStyle = (active: boolean): React.CSSProperties => ({
+  padding: '4px 8px',
+  cursor: 'pointer',
+  background: active ? '#4b5563' : 'transparent',
+  color: '#e5e7eb',
+  display: 'flex',
+  alignItems: 'center'
+});
 
 // =====================================================
 // Helpers
