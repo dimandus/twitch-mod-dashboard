@@ -303,7 +303,8 @@ const TWITCH_SCOPES = [
   'moderator:read:chatters',
   'user:read:moderated_channels',
   'user:read:follows',
-  'user:write:chat'
+  'user:write:chat',
+  'user:read:emotes'           // НОВОЕ
 ];
 
 // ----------------- Twitch OAuth (прямой) -----------------
@@ -909,6 +910,79 @@ async function fetchChannelChatBadgesHelix(broadcasterId) {
   return json; // { data: [...] }
 }
 
+// Эмоты чата
+
+async function fetchGlobalEmotesHelix() {
+  const res = await helixFetch('https://api.twitch.tv/helix/chat/emotes/global');
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.message || 'Failed to fetch global emotes');
+  }
+  // json: { data: [ { id, name, images: { url_1x, ... }, ... }, ... ] }
+  return json.data || [];
+}
+
+async function fetchUserEmotesHelix() {
+  const userId = store.get('twitch.userId');
+  if (!userId) throw new Error('Нет twitch.userId, пользователь не авторизован');
+
+  const allEmotes = [];
+  let cursor = null;
+
+  try {
+    do {
+      const url = new URL('https://api.twitch.tv/helix/chat/emotes/user');
+      url.searchParams.set('user_id', userId);
+      // берём побольше за раз
+      url.searchParams.set('first', '100');
+      if (cursor) {
+        url.searchParams.set('after', cursor);
+      }
+
+      const res = await helixFetch(url.toString());
+      const json = await res.json();
+
+      console.log(
+        '[Emotes:user] page status',
+        res.status,
+        'count',
+        Array.isArray(json.data) ? json.data.length : 0,
+        'cursor',
+        json.pagination?.cursor || null
+      );
+
+      if (!res.ok) {
+        throw new Error(json?.message || 'Failed to fetch user emotes');
+      }
+
+      if (Array.isArray(json.data)) {
+        allEmotes.push(...json.data);
+      }
+
+      cursor = json.pagination?.cursor || null;
+    } while (cursor);
+  } catch (err) {
+    console.warn('[Emotes:user] error:', err.message || err);
+    throw err;
+  }
+
+  return allEmotes;
+}
+
+async function fetchChannelEmotesHelix(channelLogin) {
+  const broadcasterId = await getBroadcasterIdByLogin(channelLogin);
+
+  const url = new URL('https://api.twitch.tv/helix/chat/emotes');
+  url.searchParams.set('broadcaster_id', broadcasterId);
+
+  const res = await helixFetch(url.toString());
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.message || 'Failed to fetch channel emotes');
+  }
+  return json.data || [];
+}
+
 // ----------------- IPC EXPORTS -----------------
 
 ipcMain.handle('twitch:getUserDetails', (e, login) =>
@@ -1010,4 +1084,17 @@ ipcMain.handle('twitch:getGlobalBadges', () =>
 // при необходимости, если будешь использовать:
 ipcMain.handle('twitch:getChannelBadges', (e, broadcasterId) =>
   fetchChannelChatBadgesHelix(broadcasterId)
+);
+
+// Эмоты
+ipcMain.handle('twitch:getGlobalEmotes', () =>
+  fetchGlobalEmotesHelix()
+);
+
+ipcMain.handle('twitch:getUserEmotes', () =>
+  fetchUserEmotesHelix()
+);
+
+ipcMain.handle('twitch:getChannelEmotes', (e, channelLogin) =>
+  fetchChannelEmotesHelix(channelLogin)
 );

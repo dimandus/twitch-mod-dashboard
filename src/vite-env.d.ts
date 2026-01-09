@@ -68,6 +68,20 @@ interface FollowedChannel {
   followed_at: string;
 }
 
+// Эмоты
+interface TwitchEmoteImages {
+  url_1x: string;
+  url_2x: string;
+  url_4x: string;
+}
+
+interface TwitchEmote {
+  id: string;
+  name: string;
+  images: TwitchEmoteImages;
+  owner_name?: string;
+}
+
 // =====================================================
 // Модерация (НОВОЕ)
 // =====================================================
@@ -108,21 +122,34 @@ interface TwitchAPI {
   getCurrentUser: () => Promise<TwitchUser | null>;
   logout: () => Promise<void>;
   getUserDetails: (login: string) => Promise<TwitchUserDetails>;
+
   // Информация о каналах и пользователях
   getChannelChatters: (channelLogin: string) => Promise<ChannelChattersResult>;
   getModeratedChannels: () => Promise<ModeratedChannel[]>;
   getChannelsLiveStatus: (logins: string[]) => Promise<ChannelLiveStatus[]>;
   getUsersInfo: (logins: string[]) => Promise<UserBasicInfo[]>;
   getFollowedChannels: () => Promise<FollowedChannel[]>;
-    getGlobalBadges: () => Promise<any>;
+  getGlobalBadges: () => Promise<any>;
   getChannelBadges?: (broadcasterId: string) => Promise<any>;
+
+  // ЭМОТЫ
+  getGlobalEmotes: () => Promise<TwitchEmote[]>;
+  getUserEmotes: () => Promise<TwitchEmote[]>;
+  getChannelEmotes: (channelLogin: string) => Promise<TwitchEmote[]>;
+
+  // Отправка сообщения через Helix
+  sendChatMessage(
+    channel: string,
+    text: string
+  ): Promise<{ messageId: string }>;
+
   // =====================================================
   // МОДЕРАЦИЯ (НОВОЕ)
   // =====================================================
-  
+
   getShieldMode: (channelLogin: string) => Promise<ShieldModeStatus>;
-setShieldMode: (channelLogin: string, isActive: boolean) => Promise<ShieldModeStatus>;
-  
+  setShieldMode: (channelLogin: string, isActive: boolean) => Promise<ShieldModeStatus>;
+
   // Баны и таймауты
   banUser: (
     channelLogin: string,
@@ -130,58 +157,58 @@ setShieldMode: (channelLogin: string, isActive: boolean) => Promise<ShieldModeSt
     duration?: number | null,
     reason?: string
   ) => Promise<ModerationResult>;
-  
+
   timeoutUser: (
     channelLogin: string,
     userLogin: string,
     duration?: number,
     reason?: string
   ) => Promise<ModerationResult>;
-  
+
   unbanUser: (
     channelLogin: string,
     userLogin: string
   ) => Promise<ModerationResult>;
-  
+
   // Сообщения
   deleteMessage: (
     channelLogin: string,
     messageId: string
   ) => Promise<ModerationResult>;
-  
+
   clearChat: (channelLogin: string) => Promise<ModerationResult>;
-  
+
   // Настройки чата
   getChatSettings: (channelLogin: string) => Promise<ChatSettings>;
-  
+
   updateChatSettings: (
     channelLogin: string,
     settings: Partial<ChatSettings>
   ) => Promise<ChatSettings>;
-  
+
   // Быстрые команды
   slowMode: (
     channelLogin: string,
     enabled: boolean,
     seconds?: number
   ) => Promise<ChatSettings>;
-  
+
   followersOnly: (
     channelLogin: string,
     enabled: boolean,
     minutes?: number
   ) => Promise<ChatSettings>;
-  
+
   subscribersOnly: (
     channelLogin: string,
     enabled: boolean
   ) => Promise<ChatSettings>;
-  
+
   emoteOnly: (
     channelLogin: string,
     enabled: boolean
   ) => Promise<ChatSettings>;
-  
+
   // Объявления
   sendAnnouncement: (
     channelLogin: string,
@@ -191,7 +218,7 @@ setShieldMode: (channelLogin: string, isActive: boolean) => Promise<ShieldModeSt
 }
 
 interface ElectronAPI {
-  ping: () => Promise<string>;
+  ping?: () => Promise<string>;
   config: ConfigAPI;
   twitch: TwitchAPI;
 }
@@ -202,18 +229,7 @@ interface ElectronAPI {
 
 declare global {
   interface Window {
-    electronAPI: {
-      twitch: {
-        // ...
-        sendChatMessage(
-          channel: string,
-          text: string
-        ): Promise<{ messageId: string }>;
-      };
-      config: {
-        // ...
-      };
-    };
+    electronAPI: ElectronAPI;
   }
 }
 

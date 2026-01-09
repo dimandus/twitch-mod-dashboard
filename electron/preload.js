@@ -15,8 +15,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     loginViaDimandus: () => ipcRenderer.invoke('twitch:loginViaDimandus'),
     getCurrentUser: () => ipcRenderer.invoke('twitch:getCurrentUser'),
     logout: () => ipcRenderer.invoke('twitch:logout'),
-getUserDetails: (login) =>
-  ipcRenderer.invoke('twitch:getUserDetails', login),
+    getUserDetails: (login) =>
+      ipcRenderer.invoke('twitch:getUserDetails', login),
+
     // Информация о каналах и пользователях
     getChannelChatters: (channelLogin) =>
       ipcRenderer.invoke('twitch:getChannelChatters', channelLogin),
@@ -26,15 +27,30 @@ getUserDetails: (login) =>
       ipcRenderer.invoke('twitch:getChannelsLiveStatus', logins),
     getUsersInfo: (logins) =>
       ipcRenderer.invoke('twitch:getUsersInfo', logins),
-getGlobalBadges: () =>
-  ipcRenderer.invoke('twitch:getGlobalBadges'),
-// при необходимости:
-getChannelBadges: (broadcasterId) =>
-  ipcRenderer.invoke('twitch:getChannelBadges', broadcasterId),
+    getFollowedChannels: () =>
+      ipcRenderer.invoke('twitch:getFollowedChannels'),
+
+    // Бейджи
+    getGlobalBadges: () =>
+      ipcRenderer.invoke('twitch:getGlobalBadges'),
+    getChannelBadges: (broadcasterId) =>
+      ipcRenderer.invoke('twitch:getChannelBadges', broadcasterId),
+
+    // ЭМОТЫ (НОВОЕ)
+    getGlobalEmotes: () =>
+      ipcRenderer.invoke('twitch:getGlobalEmotes'),
+    getUserEmotes: () =>
+      ipcRenderer.invoke('twitch:getUserEmotes'),
+    getChannelEmotes: (channelLogin) =>
+      ipcRenderer.invoke('twitch:getChannelEmotes', channelLogin),
+
     // ОТПРАВКА СООБЩЕНИЯ ЧЕРЕЗ HELIX
     sendChatMessage: (channel, text) =>
       ipcRenderer.invoke('twitch:sendChatMessage', channel, text),
-ensureAccessToken: () => ipcRenderer.invoke('twitch:ensureAccessToken'),
+
+    ensureAccessToken: () =>
+      ipcRenderer.invoke('twitch:ensureAccessToken'),
+
     // =====================================================
     // МОДЕРАЦИЯ
     // =====================================================
@@ -48,6 +64,7 @@ ensureAccessToken: () => ipcRenderer.invoke('twitch:ensureAccessToken'),
         duration,
         reason
       ),
+
     timeoutUser: (channelLogin, userLogin, duration = 600, reason = '') =>
       ipcRenderer.invoke(
         'twitch:timeoutUser',
@@ -56,6 +73,7 @@ ensureAccessToken: () => ipcRenderer.invoke('twitch:ensureAccessToken'),
         duration,
         reason
       ),
+
     unbanUser: (channelLogin, userLogin) =>
       ipcRenderer.invoke('twitch:unbanUser', channelLogin, userLogin),
 
@@ -76,9 +94,6 @@ ensureAccessToken: () => ipcRenderer.invoke('twitch:ensureAccessToken'),
       ipcRenderer.invoke('twitch:getShieldMode', channelLogin),
     setShieldMode: (channelLogin, isActive) =>
       ipcRenderer.invoke('twitch:setShieldMode', channelLogin, isActive),
-
-    getFollowedChannels: () =>
-      ipcRenderer.invoke('twitch:getFollowedChannels'),
 
     // Быстрые команды для настроек чата
     slowMode: (channelLogin, enabled, seconds = 30) =>

@@ -5,16 +5,16 @@ import React, { useEffect, useRef, useState } from 'react';
 // =====================================================
 
 export interface ChatMessage {
-  id: string; // Локальный UI ID
-  msgId?: string; // Реальный Twitch message ID (для delete)
+  id: string;
+  msgId?: string;
   userId?: string;
   text: string;
   userLogin: string;
   displayName: string;
   color?: string;
   badges: string[];
-  badgeInfo?: Record<string, string>; // badge-info (напр. subscriber: "11")
-  badgeVersions?: Record<string, string>; // badges (setId -> version, напр. subscriber: "0")
+  badgeInfo?: Record<string, string>;
+  badgeVersions?: Record<string, string>;
   self: boolean;
   timestamp: number;
   emotes?: Record<string, string[]>;
@@ -22,7 +22,7 @@ export interface ChatMessage {
   deleted?: boolean;
   isSystem?: boolean;
   canDelete?: boolean;
-  cleared?: boolean; // Сообщение «очищено» (clear chat), но не удалено
+  cleared?: boolean;
 }
 
 export interface ChatPane {
@@ -106,13 +106,24 @@ interface ChatAreaProps {
   onModeToggle: (channel: string, mode: ChatModeKey, value?: number) => void;
   onOpenUserLog: (userLogin: string) => void;
   onOpenUserProfile: (userLogin: string) => void;
-  onSelectChannel: (channel: string) => void;
-  
-  // Глобальные скейлы
+
   fontScale: number;
   globalScale: number;
   onFontScaleChange: (next: number) => void;
   onGlobalScaleChange: (next: number) => void;
+  onSelectChannel: (channel: string) => void;
+}
+
+type EmoteSource = 'global' | 'user' | 'channel';
+
+interface Emote {
+  id: string;
+  name: string;
+  url1x: string;
+  url2x: string;
+  url4x: string;
+  source: EmoteSource;
+  ownerName?: string;
 }
 
 // =====================================================
@@ -148,6 +159,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [paneHeight, setPaneHeight] = useState(260);
 
   const scrollContainersRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [mentionState, setMentionState] = useState<{
     paneId: string;
@@ -171,50 +183,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const [badgeSets, setBadgeSets] = useState<Record<string, Record<string, any>>>({});
 
-  // авто‑масштаб от размера окна
+  // масштабирование
   const [autoScale, setAutoScale] = useState(1);
 
-// Загрузка настроек раскладки (строки / размер панелей)
-useEffect(() => {
-  (async () => {
-    try {
-      const [storedRows, storedWidth, storedHeight] = await Promise.all([
-        window.electronAPI.config.get('ui.chat.rows'),
-        window.electronAPI.config.get('ui.chat.paneWidth'),
-        window.electronAPI.config.get('ui.chat.paneHeight')
-      ]);
+  // Эмоты
+  const [globalEmotes, setGlobalEmotes] = useState<Emote[]>([]);
+  const [userEmotes, setUserEmotes] = useState<Emote[]>([]);
+  const [channelEmotes, setChannelEmotes] = useState<Record<string, Emote[]>>({});
+  const [emotePicker, setEmotePicker] = useState<{
+    paneId: string;
+    tab: EmoteSource;
+  } | null>(null);
 
-      if (storedRows === 1 || storedRows === 2) {
-        setRows(storedRows);
-      }
-
-      if (typeof storedWidth === 'number') {
-        setPaneWidth((prev) => clampWidth(storedWidth));
-      }
-
-      if (typeof storedHeight === 'number') {
-        setPaneHeight((prev) => clampHeight(storedHeight));
-      }
-    } catch (err) {
-      console.warn('[ChatArea] не удалось загрузить настройки раскладки', err);
-    }
-  })();
-}, []);
-
-// Сохранение раскладки при изменении
-useEffect(() => {
-  (async () => {
-    try {
-      await Promise.all([
-        window.electronAPI.config.set('ui.chat.rows', rows),
-        window.electronAPI.config.set('ui.chat.paneWidth', paneWidth),
-        window.electronAPI.config.set('ui.chat.paneHeight', paneHeight)
-      ]);
-    } catch (err) {
-      console.warn('[ChatArea] не удалось сохранить настройки раскладки', err);
-    }
-  })();
-}, [rows, paneWidth, paneHeight]);
+  // Использование эмотов
+  const [emoteUsage, setEmoteUsage] = useState<Record<string, number>>({});
 
   // Загрузка глобальных бейджей через Helix
   useEffect(() => {
@@ -236,6 +218,80 @@ useEffect(() => {
       }
     })();
   }, []);
+
+  // Загрузка настроек раскладки (строки / размер панелей)
+  useEffect(() => {
+    (async () => {
+      try {
+        const [storedRows, storedWidth, storedHeight] = await Promise.all([
+          window.electronAPI.config.get('ui.chat.rows'),
+          window.electronAPI.config.get('ui.chat.paneWidth'),
+          window.electronAPI.config.get('ui.chat.paneHeight')
+        ]);
+
+        if (storedRows === 1 || storedRows === 2) {
+          setRows(storedRows);
+        }
+
+        if (typeof storedWidth === 'number') {
+          setPaneWidth(clampWidth(storedWidth));
+        }
+
+        if (typeof storedHeight === 'number') {
+          setPaneHeight(clampHeight(storedHeight));
+        }
+      } catch (err) {
+        console.warn('[ChatArea] не удалось загрузить настройки раскладки', err);
+      }
+    })();
+  }, []);
+
+  // Сохранение раскладки при изменении
+  useEffect(() => {
+    (async () => {
+      try {
+        await Promise.all([
+          window.electronAPI.config.set('ui.chat.rows', rows),
+          window.electronAPI.config.set('ui.chat.paneWidth', paneWidth),
+          window.electronAPI.config.set('ui.chat.paneHeight', paneHeight)
+        ]);
+      } catch (err) {
+        console.warn('[ChatArea] не удалось сохранить настройки раскладки', err);
+      }
+    })();
+  }, [rows, paneWidth, paneHeight]);
+
+  // Загрузка статистики по эмотам
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await window.electronAPI.config.get('ui.chat.emoteUsage');
+        if (stored && typeof stored === 'object') {
+          setEmoteUsage(stored as Record<string, number>);
+        }
+      } catch (err) {
+        console.warn('[ChatArea] не удалось загрузить статистику смайлов', err);
+      }
+    })();
+  }, []);
+
+  // Сохранение статистики по эмотам
+  useEffect(() => {
+    (async () => {
+      try {
+        await window.electronAPI.config.set('ui.chat.emoteUsage', emoteUsage);
+      } catch (err) {
+        console.warn('[ChatArea] не удалось сохранить статистику смайлов', err);
+      }
+    })();
+  }, [emoteUsage]);
+
+  const incrementEmoteUsage = (code: string) => {
+    setEmoteUsage((prev) => {
+      const next = { ...prev, [code]: (prev[code] || 0) + 1 };
+      return next;
+    });
+  };
 
   // Клик вне — закрывать меню/дропдауны
   useEffect(() => {
@@ -276,6 +332,92 @@ useEffect(() => {
   const changeGlobalScale = (delta: number) =>
     onGlobalScaleChange(globalScale + delta);
 
+  // Эмоты: глобальные и «мои»
+  useEffect(() => {
+    (async () => {
+      try {
+        // Глобальные эмоты
+        const rawGlobal = await window.electronAPI.twitch.getGlobalEmotes?.();
+        if (Array.isArray(rawGlobal)) {
+          setGlobalEmotes(
+            rawGlobal.map((e: any) => {
+              const urls = buildEmoteUrls(e.id);
+              return {
+                id: e.id,
+                name: e.name,
+                url1x: urls.url1x,
+                url2x: urls.url2x,
+                url4x: urls.url4x,
+                source: 'global',
+                ownerName: e.owner_name
+              } as Emote;
+            })
+          );
+        }
+
+        // Эмоты пользователя (через /chat/emotes/user)
+        const rawUser = await window.electronAPI.twitch.getUserEmotes?.();
+        if (Array.isArray(rawUser)) {
+          setUserEmotes(
+            rawUser.map((e: any) => {
+              const urls = buildEmoteUrls(e.id);
+              return {
+                id: e.id,
+                name: e.name,
+                url1x: urls.url1x,
+                url2x: urls.url2x,
+                url4x: urls.url4x,
+                source: 'user',
+                ownerName: e.owner_name
+              } as Emote;
+            })
+          );
+        }
+      } catch (err) {
+        console.warn('[ChatArea] не удалось загрузить эмоты (global/user)', err);
+      }
+    })();
+  }, []);
+
+  // Эмоты каналов
+  useEffect(() => {
+    (async () => {
+      try {
+        const current = channelEmotes;
+
+        for (const pane of chatPanes) {
+          const login = pane.channel.toLowerCase().trim();
+          if (!login) continue;
+          if (current[login]) continue;
+
+          const raw = await window.electronAPI.twitch.getChannelEmotes?.(login);
+          if (!Array.isArray(raw)) continue;
+
+          const emotes: Emote[] = raw.map((e: any) => {
+            const urls = buildEmoteUrls(e.id);
+            return {
+              id: e.id,
+              name: e.name,
+              url1x: urls.url1x,
+              url2x: urls.url2x,
+              url4x: urls.url4x,
+              source: 'channel',
+              ownerName: e.owner_name
+            } as Emote;
+          });
+
+          setChannelEmotes((prev) => ({
+            ...prev,
+            [login]: emotes
+          }));
+        }
+      } catch (err) {
+        console.warn('[ChatArea] не удалось загрузить эмоты каналов', err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatPanes]);
+
   // Drag & Drop
   const handleContainerDragOver: React.DragEventHandler<HTMLDivElement> = (e) => {
     const types = e.dataTransfer.types;
@@ -284,12 +426,10 @@ useEffect(() => {
     e.dataTransfer.dropEffect = 'copy';
     setIsDropActive(true);
   };
-
   const handleContainerDragLeave: React.DragEventHandler<HTMLDivElement> = (e) => {
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setIsDropActive(false);
   };
-
   const handleContainerDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
     if (!Array.from(e.dataTransfer.types).includes('text/channel-login')) return;
     e.preventDefault();
@@ -297,18 +437,21 @@ useEffect(() => {
     const channel = e.dataTransfer.getData('text/channel-login');
     if (channel) onAddChat(channel);
   };
-
-  const handlePaneDragStart = (e: React.DragEvent<HTMLDivElement>, paneId: string) => {
+  const handlePaneDragStart = (
+    e: React.DragEvent<HTMLDivElement>,
+    paneId: string
+  ) => {
     setDraggingId(paneId);
     e.dataTransfer.effectAllowed = 'move';
   };
-
   const handlePaneDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
-
-  const handlePaneDrop = (e: React.DragEvent<HTMLDivElement>, targetId: string) => {
+  const handlePaneDrop = (
+    e: React.DragEvent<HTMLDivElement>,
+    targetId: string
+  ) => {
     e.preventDefault();
     if (!draggingId || draggingId === targetId) return;
     const fromIndex = chatPanes.findIndex((p) => p.id === draggingId);
@@ -320,7 +463,6 @@ useEffect(() => {
     onReorderChats(next);
     setDraggingId(null);
   };
-
   const handlePaneDragEnd = () => setDraggingId(null);
 
   // Input
@@ -344,7 +486,6 @@ useEffect(() => {
       return;
     }
 
-    // '@' должен быть началом слова
     if (atIndex > 0 && !/\s/.test(value[atIndex - 1])) {
       setMentionState(null);
       return;
@@ -417,7 +558,9 @@ useEffect(() => {
             ? null
             : {
                 ...prev,
-                selectedIndex: (prev.selectedIndex + 1) % prev.suggestions.length
+                selectedIndex:
+                  (prev.selectedIndex + 1) %
+                  prev.suggestions.length
               }
         );
         return;
@@ -452,6 +595,35 @@ useEffect(() => {
       e.preventDefault();
       handleSend(pane);
     }
+  };
+
+  const insertEmoteToInput = (paneId: string, code: string) => {
+    incrementEmoteUsage(code);
+
+    const el = inputRefs.current[paneId];
+    const current = inputValues[paneId] || '';
+
+    if (!el) {
+      const newValue = (current + ' ' + code).trimStart();
+      setInputValues((prev) => ({ ...prev, [paneId]: newValue + ' ' }));
+      return;
+    }
+
+    const start = el.selectionStart ?? current.length;
+    const end = el.selectionEnd ?? current.length;
+
+    const before = current.slice(0, start);
+    const after = current.slice(end);
+
+    const newValue = before + code + ' ' + after;
+
+    setInputValues((prev) => ({ ...prev, [paneId]: newValue }));
+
+    requestAnimationFrame(() => {
+      const pos = before.length + code.length + 1;
+      el.selectionStart = el.selectionEnd = pos;
+      el.focus();
+    });
   };
 
   // Auto-scroll
@@ -544,15 +716,15 @@ useEffect(() => {
   ) => {
     e.stopPropagation();
     setOpenDropdown((prev) =>
-      prev?.channel === channel && prev?.type === type ? null : { channel, type }
+      prev?.channel === channel && prev?.type === type
+        ? null
+        : { channel, type }
     );
   };
-
   const handleSlowModeSelect = (channel: string, seconds: number) => {
     onModeToggle(channel, 'slow', seconds);
     setOpenDropdown(null);
   };
-
   const handleFollowersModeSelect = (channel: string, minutes: number) => {
     onModeToggle(channel, 'followers', minutes);
     setOpenDropdown(null);
@@ -603,46 +775,76 @@ useEffect(() => {
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Строки:</span>
-            <button onClick={() => setRows(1)} style={rowButtonStyle(rows === 1)}>
+            <button
+              onClick={() => setRows(1)}
+              style={rowButtonStyle(rows === 1)}
+            >
               1
             </button>
-            <button onClick={() => setRows(2)} style={rowButtonStyle(rows === 2)}>
+            <button
+              onClick={() => setRows(2)}
+              style={rowButtonStyle(rows === 2)}
+            >
               2
             </button>
           </div>
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Размер:</span>
-            <button onClick={() => changePaneWidth(-20)} style={sizeButtonStyle}>
+            <button
+              onClick={() => changePaneWidth(-20)}
+              style={sizeButtonStyle}
+            >
               W-
             </button>
-            <button onClick={() => changePaneWidth(20)} style={sizeButtonStyle}>
+            <button
+              onClick={() => changePaneWidth(20)}
+              style={sizeButtonStyle}
+            >
               W+
             </button>
-            <button onClick={() => changePaneHeight(-20)} style={sizeButtonStyle}>
+            <button
+              onClick={() => changePaneHeight(-20)}
+              style={sizeButtonStyle}
+            >
               H-
             </button>
-            <button onClick={() => changePaneHeight(20)} style={sizeButtonStyle}>
+            <button
+              onClick={() => changePaneHeight(20)}
+              style={sizeButtonStyle}
+            >
               H+
             </button>
           </div>
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Шрифт:</span>
-            <button onClick={() => changeFontScale(-0.1)} style={sizeButtonStyle}>
+            <button
+              onClick={() => changeFontScale(-0.1)}
+              style={sizeButtonStyle}
+            >
               A-
             </button>
-            <button onClick={() => changeFontScale(0.1)} style={sizeButtonStyle}>
+            <button
+              onClick={() => changeFontScale(0.1)}
+              style={sizeButtonStyle}
+            >
               A+
             </button>
           </div>
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Scale:</span>
-            <button onClick={() => changeGlobalScale(-0.1)} style={sizeButtonStyle}>
+            <button
+              onClick={() => changeGlobalScale(-0.1)}
+              style={sizeButtonStyle}
+            >
               S-
             </button>
-            <button onClick={() => changeGlobalScale(0.1)} style={sizeButtonStyle}>
+            <button
+              onClick={() => changeGlobalScale(0.1)}
+              style={sizeButtonStyle}
+            >
               S+
             </button>
           </div>
@@ -661,10 +863,13 @@ useEffect(() => {
             const inputValue = inputValues[pane.id] || '';
             const canSend = !!pane.channel && inputValue.trim().length > 0;
             const isSelected =
-              selectedChannel?.toLowerCase() === pane.channel.toLowerCase();
-            const modes = roomModes[pane.channel.toLowerCase()] || defaultModes;
+              selectedChannel?.toLowerCase() ===
+              pane.channel.toLowerCase();
+            const modes =
+              roomModes[pane.channel.toLowerCase()] || defaultModes;
             const isSlowDropdownOpen =
-              openDropdown?.channel === pane.channel && openDropdown?.type === 'slow';
+              openDropdown?.channel === pane.channel &&
+              openDropdown?.type === 'slow';
             const isFollowersDropdownOpen =
               openDropdown?.channel === pane.channel &&
               openDropdown?.type === 'followers';
@@ -673,7 +878,7 @@ useEffect(() => {
               <div
                 key={pane.id}
                 draggable
-				onClick={() => onSelectChannel(pane.channel)}
+                onClick={() => onSelectChannel(pane.channel)}
                 onDragStart={(e) => handlePaneDragStart(e, pane.id)}
                 onDragOver={handlePaneDragOver}
                 onDrop={(e) => handlePaneDrop(e, pane.id)}
@@ -708,21 +913,30 @@ useEffect(() => {
                   </div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button
-                      onClick={() => onClearChat(pane.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClearChat(pane.id);
+                      }}
                       title="Очистить локально"
                       style={iconButtonStyle}
                     >
                       ⌫
                     </button>
                     <button
-                      onClick={() => onTogglePause(pane.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTogglePause(pane.id);
+                      }}
                       title={pane.paused ? 'Продолжить' : 'Пауза'}
                       style={iconButtonStyle}
                     >
                       {pane.paused ? '▶' : '⏸'}
                     </button>
                     <button
-                      onClick={() => onRemoveChat(pane.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveChat(pane.id);
+                      }}
                       title="Закрыть"
                       style={iconButtonStyle}
                     >
@@ -734,7 +948,10 @@ useEffect(() => {
                 {/* MODES BAR */}
                 <div style={modesBarStyle}>
                   <button
-                    onClick={() => onModeToggle(pane.channel, 'shield')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onModeToggle(pane.channel, 'shield');
+                    }}
                     style={modeButtonStyle(modes.shield, '#ef4444')}
                     title="Защитный режим"
                   >
@@ -743,7 +960,9 @@ useEffect(() => {
 
                   <div style={{ position: 'relative' }}>
                     <button
-                      onClick={(e) => handleDropdownClick(e, pane.channel, 'slow')}
+                      onClick={(e) =>
+                        handleDropdownClick(e, pane.channel, 'slow')
+                      }
                       style={modeButtonStyle(modes.slow)}
                       title="Медленный режим"
                     >
@@ -761,11 +980,14 @@ useEffect(() => {
                         {SLOW_MODE_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
-                            onClick={() => handleSlowModeSelect(pane.channel, opt.value)}
+                            onClick={() =>
+                              handleSlowModeSelect(pane.channel, opt.value)
+                            }
                             style={dropdownItemStyle(
                               opt.value === 0
                                 ? !modes.slow
-                                : modes.slow && modes.slowDuration === opt.value
+                                : modes.slow &&
+                                    modes.slowDuration === opt.value
                             )}
                           >
                             {opt.label}
@@ -776,7 +998,10 @@ useEffect(() => {
                   </div>
 
                   <button
-                    onClick={() => onModeToggle(pane.channel, 'emote')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onModeToggle(pane.channel, 'emote');
+                    }}
                     style={modeButtonStyle(modes.emote)}
                     title="Только эмодзи"
                   >
@@ -785,13 +1010,17 @@ useEffect(() => {
 
                   <div style={{ position: 'relative' }}>
                     <button
-                      onClick={(e) => handleDropdownClick(e, pane.channel, 'followers')}
+                      onClick={(e) =>
+                        handleDropdownClick(e, pane.channel, 'followers')
+                      }
                       style={modeButtonStyle(modes.followers)}
                       title="Только фолловеры"
                     >
                       Foll{' '}
                       {modes.followers
-                        ? `(${formatFollowersDuration(modes.followersDuration)})`
+                        ? `(${formatFollowersDuration(
+                            modes.followersDuration
+                          )})`
                         : ''}{' '}
                       <span style={{ marginLeft: 2, fontSize: 8 }}>▼</span>
                     </button>
@@ -804,7 +1033,10 @@ useEffect(() => {
                           <button
                             key={opt.value}
                             onClick={() =>
-                              handleFollowersModeSelect(pane.channel, opt.value)
+                              handleFollowersModeSelect(
+                                pane.channel,
+                                opt.value
+                              )
                             }
                             style={dropdownItemStyle(
                               opt.value === -1
@@ -821,21 +1053,30 @@ useEffect(() => {
                   </div>
 
                   <button
-                    onClick={() => onModeToggle(pane.channel, 'subs')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onModeToggle(pane.channel, 'subs');
+                    }}
                     style={modeButtonStyle(modes.subs)}
                     title="Только подписчики"
                   >
                     Subs
                   </button>
                   <button
-                    onClick={() => onModeToggle(pane.channel, 'unique')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onModeToggle(pane.channel, 'unique');
+                    }}
                     style={modeButtonStyle(modes.unique)}
                     title="Уникальные сообщения"
                   >
                     Uniq
                   </button>
                   <button
-                    onClick={() => handleClearGlobal(pane)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClearGlobal(pane);
+                    }}
                     style={{
                       ...modeButtonStyle(false),
                       borderColor: '#f97316',
@@ -876,7 +1117,11 @@ useEffect(() => {
                         <div
                           key={m.msgId || m.id}
                           onContextMenu={(e) =>
-                            handleMessageContextMenu(e, pane.channel, m)
+                            handleMessageContextMenu(
+                              e,
+                              pane.channel,
+                              m
+                            )
                           }
                           data-msg-id={m.msgId}
                           style={messageStyle(
@@ -930,7 +1175,7 @@ useEffect(() => {
                   )}
                 </div>
 
-                {/* MENTION SUGGESTIONS */}
+                {/* Упоминания */}
                 {mentionState && mentionState.paneId === pane.id && (
                   <div style={mentionBoxStyle(textScale)}>
                     {mentionState.suggestions.map((name, idx) => (
@@ -951,6 +1196,93 @@ useEffect(() => {
                   </div>
                 )}
 
+                {/* ПИКЕР ЭМОТОВ */}
+                {emotePicker && emotePicker.paneId === pane.id && (
+                  <div style={emotePickerStyle}>
+                    <div style={emoteTabsStyle}>
+                      <button
+                        style={emoteTabButtonStyle(emotePicker.tab === 'channel')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmotePicker((prev) =>
+                            prev ? { ...prev, tab: 'channel' } : prev
+                          );
+                        }}
+                      >
+                        Канал
+                      </button>
+                      <button
+                        style={emoteTabButtonStyle(emotePicker.tab === 'user')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmotePicker((prev) =>
+                            prev ? { ...prev, tab: 'user' } : prev
+                          );
+                        }}
+                      >
+                        Мои
+                      </button>
+                      <button
+                        style={emoteTabButtonStyle(emotePicker.tab === 'global')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmotePicker((prev) =>
+                            prev ? { ...prev, tab: 'global' } : prev
+                          );
+                        }}
+                      >
+                        Глобальные
+                      </button>
+                    </div>
+
+                    <div style={emoteGridStyle}>
+                      {(() => {
+                        const chan = pane.channel.toLowerCase();
+                        const channelList = channelEmotes[chan] || [];
+
+                        let list: Emote[] = [];
+                        if (emotePicker.tab === 'channel') list = channelList;
+                        else if (emotePicker.tab === 'user') list = userEmotes;
+                        else if (emotePicker.tab === 'global') list = globalEmotes;
+
+                        if (!list.length) {
+                          return (
+                            <div style={{ fontSize: 11 * textScale, color: '#9ca3af', padding: 4 }}>
+                              Нет эмотов для этой вкладки.
+                            </div>
+                          );
+                        }
+
+                        const sorted = [...list].sort((a, b) => {
+                          const ua = emoteUsage[a.name] || 0;
+                          const ub = emoteUsage[b.name] || 0;
+                          if (ua !== ub) return ub - ua;
+                          return a.name.localeCompare(b.name);
+                        });
+
+                        return sorted.map((e) => (
+                          <button
+                            key={e.id}
+                            type="button"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              insertEmoteToInput(pane.id, e.name);
+                            }}
+                            style={emoteButtonStyle}
+                            title={e.ownerName ? `${e.name} (${e.ownerName})` : e.name}
+                          >
+                            <img
+                              src={e.url1x}
+                              alt={e.name}
+                              style={{ width: 24, height: 24 }}
+                            />
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+
                 {/* INPUT */}
                 <div style={inputContainerStyle}>
                   <input
@@ -958,10 +1290,30 @@ useEffect(() => {
                     placeholder="Сообщение..."
                     disabled={!pane.channel}
                     value={inputValue}
-                    onChange={(e) => handleInputChange(pane.id, e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange(pane.id, e.target.value)
+                    }
                     onKeyDown={(e) => handleInputKeyDown(e, pane)}
                     style={inputStyle(textScale)}
+                    ref={(el) => {
+                      inputRefs.current[pane.id] = el;
+                    }}
                   />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEmotePicker((prev) =>
+                        prev && prev.paneId === pane.id
+                          ? null
+                          : { paneId: pane.id, tab: 'channel' }
+                      );
+                    }}
+                    style={emojiButtonStyle}
+                    title="Вставить эмодзи"
+                  >
+                    😊
+                  </button>
                   <button
                     disabled={!canSend}
                     onClick={() => handleSend(pane)}
@@ -1086,7 +1438,9 @@ const chatsGridStyle = (isTwoRows: boolean): React.CSSProperties => ({
 const emptyStateStyle = (isDropActive: boolean): React.CSSProperties => ({
   flex: 1,
   borderRadius: 8,
-  border: isDropActive ? '1px dashed #4ade80' : '1px dashed #374151',
+  border: isDropActive
+    ? '1px dashed #4ade80'
+    : '1px dashed #374151',
   background: '#020617',
   color: '#6b7280',
   fontSize: 13,
@@ -1176,6 +1530,16 @@ const sendButtonStyle = (canSend: boolean): React.CSSProperties => ({
   opacity: canSend ? 1 : 0.6
 });
 
+const emojiButtonStyle: React.CSSProperties = {
+  padding: '4px 8px',
+  borderRadius: 6,
+  border: '1px solid #4b5563',
+  background: '#1f2933',
+  color: '#e5e7eb',
+  fontSize: 12,
+  cursor: 'pointer'
+};
+
 const iconButtonStyle: React.CSSProperties = {
   width: 22,
   height: 22,
@@ -1227,7 +1591,7 @@ const dropdownMenuStyle: React.CSSProperties = {
 
 const mentionBoxStyle = (fontScale: number): React.CSSProperties => ({
   position: 'absolute',
-  bottom: 32,
+  bottom: 72,
   left: 6,
   right: 6,
   maxHeight: 150,
@@ -1397,6 +1761,57 @@ const systemMessageStyle = (fontScale: number): React.CSSProperties => ({
   fontStyle: 'italic'
 });
 
+const emotePickerStyle: React.CSSProperties = {
+  position: 'absolute',
+  bottom: 72,
+  left: 6,
+  right: 6,
+  maxHeight: 230,
+  overflowY: 'auto',
+  background: '#111827',
+  border: '1px solid #374151',
+  borderRadius: 6,
+  zIndex: 1900,
+  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+  padding: 4
+};
+
+const emoteTabsStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: 4,
+  marginBottom: 4
+};
+
+const emoteTabButtonStyle = (active: boolean): React.CSSProperties => ({
+  flex: 1,
+  padding: '2px 4px',
+  borderRadius: 4,
+  border: '1px solid #4b5563',
+  background: active ? '#4b5563' : '#1f2933',
+  color: '#e5e7eb',
+  fontSize: 11,
+  cursor: 'pointer'
+});
+
+const emoteGridStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 4
+};
+
+const emoteButtonStyle: React.CSSProperties = {
+  width: 30,
+  height: 30,
+  borderRadius: 4,
+  border: 'none',
+  background: '#1f2933',
+  padding: 2,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center'
+};
+
 // =====================================================
 // Helpers
 // =====================================================
@@ -1424,6 +1839,16 @@ function formatFollowersDuration(minutes: number): string {
   if (minutes < 10080) return `${Math.floor(minutes / 1440)}д`;
   if (minutes < 43200) return `${Math.floor(minutes / 10080)}н`;
   return `${Math.floor(minutes / 43200)}мес`;
+}
+
+// Построение URL для эмота по CDN-шаблону (поддерживает анимацию, если есть)
+function buildEmoteUrls(id: string): { url1x: string; url2x: string; url4x: string } {
+  const base = `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark`;
+  return {
+    url1x: `${base}/1.0`,
+    url2x: `${base}/2.0`,
+    url4x: `${base}/3.0`
+  };
 }
 
 function badgeTitle(setId: string, months?: string): string {
@@ -1461,7 +1886,8 @@ function renderBadges(
       if (!set) return null;
 
       const versionId = badgeVersions?.[setId] || '1';
-      const verData = set[versionId] || Object.values(set)[0];
+      const verData =
+        set[versionId] || Object.values(set)[0];
 
       if (!verData) return null;
 
@@ -1472,7 +1898,8 @@ function renderBadges(
       if (!url) return null;
 
       const months = badgeInfo?.[setId];
-      const title = verData.title || badgeTitle(setId, months);
+      const title =
+        verData.title || badgeTitle(setId, months);
 
       return (
         <img
@@ -1577,7 +2004,9 @@ function renderMessageWithEmotes(
     lastIndex = t.end + 1;
   });
   if (lastIndex < text.length) {
-    result.push(<span key={'t-tail'}>{text.slice(lastIndex)}</span>);
+    result.push(
+      <span key={'t-tail'}>{text.slice(lastIndex)}</span>
+    );
   }
   return result;
 }
