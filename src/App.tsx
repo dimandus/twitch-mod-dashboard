@@ -10,6 +10,7 @@ import { twitchChatClient } from './chat/TwitchChatClient';
 import type { ChatPane, ChatMessage } from './views/ChatArea';
 import { handleModCommand } from './commands/ModCommands';
 import { createSystemMessage } from './utils/chatSystemMessages';
+import { logger } from './utils/logger';
 
 type Tab = 'dashboard' | 'settings';
 
@@ -527,20 +528,20 @@ const App: React.FC = () => {
       try {
         const user = await window.electronAPI.twitch.getCurrentUser();
         if (!user) {
-          console.warn('[App] Нет сохранённого Twitch пользователя');
+          logger.warn('[App] Нет сохранённого Twitch пользователя');
           setChatReady(false);
           return;
         }
 
         // Если чат уже подключен с этим пользователем, не переподключаем
         if (twitchChatClient.isConnected() && currentUserLoginRef.current === user.login.toLowerCase()) {
-          console.log('[App] Чат уже подключен для этого пользователя');
+          logger.info('[App] Чат уже подключен для этого пользователя');
           return;
         }
 
         // Если чат подключен, но пользователь другой - отключаемся
         if (twitchChatClient.isConnected()) {
-          console.log('[App] Отключаемся от предыдущего пользователя');
+          logger.info('[App] Отключаемся от предыдущего пользователя');
           await twitchChatClient.disconnect();
         }
 
@@ -556,14 +557,14 @@ const App: React.FC = () => {
             await window.electronAPI.twitch.ensureAccessToken();
           if (ensured) token = ensured;
         } catch (e) {
-          console.warn(
+          logger.warn(
             '[App] не удалось обновить токен Twitch через Helix',
             e
           );
         }
 
         if (!token) {
-          console.warn(
+          logger.warn(
             '[App] Нет валидного Twitch accessToken. Нужно заново войти в аккаунт.'
           );
           setChatReady(false);
@@ -1063,7 +1064,7 @@ setActiveChatters((prev) => {
 
         setChatReady(true);
       } catch (err) {
-        console.error('[App] ошибка инициализации чат-клиента', err);
+        logger.error('[App] ошибка инициализации чат-клиента', err);
       }
     };
 

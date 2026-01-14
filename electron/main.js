@@ -9,6 +9,14 @@ const store = require('./store');
 
 const isDev = !app.isPackaged;
 
+// Логирование с уровнями серьезности
+const log = {
+  info: (...args) => console.log('[INFO]', ...args),
+  warn: (...args) => console.warn('[WARN]', ...args),
+  error: (...args) => console.error('[ERROR]', ...args),
+  debug: (...args) => isDev && console.log('[DEBUG]', ...args)
+};
+
 const DIMANDUS_BASE_URL = 'https://dimandus.ru:5001';
 // Client ID для Dimandus режима (публичный)
 const DIMANDUS_TWITCH_CLIENT_ID = '2sk3t84wmxpeulajhrnrf7ztlid1xp';
@@ -55,7 +63,7 @@ function getHelixHeaders() {
 let globalRefreshPromise = null;
 
 async function refreshTwitchToken() {
-  console.log('[Auth] Запрос на обновление токена...');
+  log.info('[Auth] Запрос на обновление токена...');
 
   const refreshToken = store.get('twitch.refreshToken');
   if (!refreshToken) {
@@ -73,7 +81,7 @@ async function refreshTwitchToken() {
     !savedClientSecret &&
     savedClientId === DIMANDUS_TWITCH_CLIENT_ID
   ) {
-    console.log('[Auth] Обнаружен конфиг Dimandus, переключение режима...');
+    log.info('[Auth] Обнаружен конфиг Dimandus, переключение режима...');
     authMode = 'dimandus';
     store.set('twitch.authMode', 'dimandus');
   }
@@ -82,7 +90,7 @@ async function refreshTwitchToken() {
   // РЕЖИМ 1: DIMANDUS
   // ------------------------------------------------------------
   if (authMode === 'dimandus') {
-    console.log('[Auth] Обновление через сервер Dimandus...');
+    log.info('[Auth] Обновление через сервер Dimandus...');
     const refreshUrl = `${DIMANDUS_BASE_URL}/api/auth/twitch/refresh`;
 
     try {
@@ -107,10 +115,10 @@ async function refreshTwitchToken() {
       store.set('twitch.accessToken', json.access_token);
       if (json.refresh_token) store.set('twitch.refreshToken', json.refresh_token);
 
-      console.log('[Auth] Токен успешно обновлен (Dimandus)!');
+      log.info('[Auth] Токен успешно обновлен (Dimandus)!');
       return json.access_token;
     } catch (err) {
-      console.error('[Auth] Ошибка рефреша (Dimandus):', err.message);
+      log.error('[Auth] Ошибка рефреша (Dimandus):', err.message);
       throw err;
     }
   }
@@ -119,7 +127,7 @@ async function refreshTwitchToken() {
   // РЕЖИМ 2: DIRECT
   // ------------------------------------------------------------
   else {
-    console.log('[Auth] Прямое обновление через Twitch API...');
+    log.info('[Auth] Прямое обновление через Twitch API...');
     if (!savedClientId || !savedClientSecret) {
       throw new Error('Нет Client Secret для прямого обновления.');
     }
@@ -149,10 +157,10 @@ async function refreshTwitchToken() {
       store.set('twitch.accessToken', json.access_token);
       if (json.refresh_token) store.set('twitch.refreshToken', json.refresh_token);
 
-      console.log('[Auth] Токен успешно обновлен (Direct)!');
+      log.info('[Auth] Токен успешно обновлен (Direct)!');
       return json.access_token;
     } catch (err) {
-      console.error('[Auth] Ошибка рефреша (Direct):', err.message);
+      log.error('[Auth] Ошибка рефреша (Direct):', err.message);
       throw err;
     }
   }
@@ -178,7 +186,7 @@ async function helixFetch(url, options = {}, _isRetry = false) {
   // 2. Если 401 (Unauthorized)
   if (res.status === 401) {
     if (_isRetry) {
-      console.error(
+      log.error(
         `[Helix] 401 ПОСЛЕ рефреша. Токен невалиден или не хватает прав (Scopes). Сброс сессии.`
       );
 
@@ -190,7 +198,7 @@ async function helixFetch(url, options = {}, _isRetry = false) {
     }
 
     if (!globalRefreshPromise) {
-      console.log('[Helix] 401 -> Запуск рефреша...');
+      log.info('[Helix] 401 -> Запуск рефреша...');
       globalRefreshPromise = refreshTwitchToken()
         .then(() => {
           return new Promise((r) => setTimeout(r, 500));
@@ -199,7 +207,7 @@ async function helixFetch(url, options = {}, _isRetry = false) {
           globalRefreshPromise = null;
         });
     } else {
-      console.log('[Helix] 401 -> Ждем завершения уже запущенного рефреша...');
+      log.info('[Helix] 401 -> Ждем завершения уже запущенного рефреша...');
     }
 
     try {
@@ -213,7 +221,7 @@ async function helixFetch(url, options = {}, _isRetry = false) {
 
       return await helixFetch(url, retryConfig, true);
     } catch (refreshErr) {
-      console.error('[Helix] Не удалось восстановить сессию:', refreshErr.message);
+      log.error('[Helix] Не удалось восстановить сессию:', refreshErr.message);
       store.delete('twitch.accessToken');
       throw new Error('Сессия Twitch истекла. Перезайдите в приложение.');
     }

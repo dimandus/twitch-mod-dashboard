@@ -1,4 +1,5 @@
 import tmi from 'tmi.js';
+import { logger } from '../utils/logger';
 
 // =====================================================
 // Типы
@@ -83,7 +84,7 @@ export class TwitchChatClient {
 
   async connect(username: string, accessToken: string): Promise<void> {
     if (this.client) {
-      console.log('[TwitchChatClient] уже подключен');
+      logger.info('[TMI] уже подключен');
       return;
     }
 
@@ -112,18 +113,18 @@ export class TwitchChatClient {
     // =====================================================
 
     client.on('connected', (addr, port) => {
-      console.log('[TMI] connected to', addr, port);
+      logger.info('[TMI] connected to', addr, port);
     });
 
     client.on('disconnected', (reason) => {
-      console.log('[TMI] disconnected:', reason);
+      logger.warn('[TMI] disconnected:', reason);
       
       // Если отключение из-за ошибки аутентификации, нужно обновить токен
       if (reason && typeof reason === 'string' && 
           (reason.includes('Login authentication failed') || 
            reason.includes('authentication') ||
            reason.includes('Invalid oauth token'))) {
-        console.warn('[TMI] Обнаружена ошибка аутентификации, требуется обновление токена');
+        logger.error('[TMI] Обнаружена ошибка аутентификации, требуется обновление токена');
         // Сбрасываем клиент, чтобы можно было переподключиться
         this.client = null;
         this.joinedChannels.clear();
@@ -138,7 +139,7 @@ export class TwitchChatClient {
     client.on('message', (chan, tags, msg, self) => {
       const loginChan = normalizeChannel(chan);
 
-      console.log('[TMI message]', {
+      logger.debug('[TMI message]', {
         rawChannel: chan,
         channel: loginChan,
         self,
@@ -213,7 +214,7 @@ export class TwitchChatClient {
 
     client.on('notice', (chan, msgId, message) => {
       const loginChan = normalizeChannel(chan);
-      console.log('[TMI NOTICE]', { channel: loginChan, msgId, message });
+      logger.info('[TMI NOTICE]', { channel: loginChan, msgId, message });
       for (const h of this.noticeHandlers) {
         h({ channel: loginChan, msgId, message });
       }
@@ -221,20 +222,20 @@ export class TwitchChatClient {
 
     // ===== ДОПОЛНИТЕЛЬНЫЕ ЛОГИ =====
     client.on('join', (chan, username, self) => {
-      console.log('[TMI JOIN]', { channel: normalizeChannel(chan), username, self });
+      logger.debug('[TMI JOIN]', { channel: normalizeChannel(chan), username, self });
     });
     client.on('part', (chan, username, self) => {
-      console.log('[TMI PART]', { channel: normalizeChannel(chan), username, self });
+      logger.debug('[TMI PART]', { channel: normalizeChannel(chan), username, self });
     });
     client.on('error', (err) => {
-      console.error('[TMI ERROR]', err);
+      logger.error('[TMI ERROR]', err);
       
       // Обработка ошибок аутентификации
       const errMsg = err?.message || String(err || '');
       if (errMsg.includes('Login authentication failed') || 
           errMsg.includes('authentication') ||
           errMsg.includes('Invalid oauth token')) {
-        console.warn('[TMI] Ошибка аутентификации токена, требуется обновление');
+        logger.error('[TMI] Ошибка аутентификации токена, требуется обновление');
         // Сбрасываем клиент для переподключения
         this.client = null;
         this.joinedChannels.clear();
@@ -246,14 +247,14 @@ export class TwitchChatClient {
       }
     });
     client.on('raw_message', (msgCloned, msg) => {
-      console.log('[TMI RAW]', msgCloned);
+      logger.debug('[TMI RAW]', msgCloned);
     });
     client.on('data', (data) => {
-      console.log('[TMI DATA]', data);
+      logger.debug('[TMI DATA]', data);
     });
 
     await client.connect();
-    console.log('[TwitchChatClient] connected as', this.currentUsername);
+    logger.info('[TMI] connected as', this.currentUsername);
   }
 
   // =====================================================
@@ -267,8 +268,8 @@ export class TwitchChatClient {
     if (this.joinedChannels.has(login)) return;
     await this.client.join(login);
     this.joinedChannels.add(login);
-    console.log('[TMI] joined', login);
-    console.log('[TMI] getChannels:', this.client.getChannels());
+    logger.info('[TMI] joined', login);
+    logger.debug('[TMI] getChannels:', this.client.getChannels());
   }
 
   async partChannel(channelLogin: string): Promise<void> {
@@ -278,7 +279,7 @@ export class TwitchChatClient {
     try {
       await this.client.part(login);
     } catch (e) {
-      console.warn('Part error', e);
+      logger.warn('Part error', e);
     }
     this.joinedChannels.delete(login);
   }
@@ -293,8 +294,8 @@ export class TwitchChatClient {
       await this.joinChannel(login);
     }
 
-    console.log('[TMI] getChannels:', this.client.getChannels());
-    console.log('[TMI] sendMessage:', { login, msg });
+    logger.debug('[TMI] getChannels:', this.client.getChannels());
+    logger.debug('[TMI] sendMessage:', { login, msg });
 
     await this.client.say(login, msg);
   }
@@ -377,7 +378,7 @@ export class TwitchChatClient {
     this.banHandlers.clear();
     this.timeoutHandlers.clear();
     this.modActionHandlers.clear();
-    console.log('[TwitchChatClient] disconnected');
+    logger.info('[TMI] disconnected');
   }
 
   isConnected(): boolean {
