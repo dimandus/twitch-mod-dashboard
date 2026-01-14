@@ -1455,6 +1455,9 @@ function buildChatMessage(
   const badgeInfo: Record<string, string> = tags['badge-info'] || {};
   const badges = Object.keys(badgeVersions);
 
+  // Проверяем, является ли пользователь участником рейда
+  const isRaider = !!(tags['msg-param-viewerCount'] || tags['msg-param-viewer-count']);
+
   return {
     id: localId,
     msgId,
@@ -1472,7 +1475,8 @@ function buildChatMessage(
       : Date.now(),
     emotes: tags.emotes,
     deleted: false,
-    mentionedSelf: mentionedSelf ?? false
+    mentionedSelf: mentionedSelf ?? false,
+    isRaider
   };
 }
 

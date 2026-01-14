@@ -23,6 +23,7 @@ export interface ChatMessage {
   isSystem?: boolean;
   canDelete?: boolean;
   cleared?: boolean;
+  isRaider?: boolean;
 }
 
 export interface ChatPane {
@@ -1226,6 +1227,7 @@ const applyCommandSuggestion = (paneId: string) => {
                       const isDeleted = !!m.deleted;
                       const isCleared = !!m.cleared && !isDeleted;
                       const isMentionedSelf = !!m.mentionedSelf;
+                      const isRaider = !!m.isRaider;
 
                       return (
                         <div
@@ -1242,7 +1244,8 @@ const applyCommandSuggestion = (paneId: string) => {
                             isDeleted,
                             isCleared,
                             isMentionedSelf,
-                            textScale
+                            textScale,
+                            isRaider
                           )}
                         >
                           <div
@@ -1791,13 +1794,16 @@ const messageStyle = (
   isDeleted: boolean = false,
   isCleared: boolean = false,
   isMentionedSelf: boolean = false,
-  fontScale: number = 1
+  fontScale: number = 1,
+  isRaider: boolean = false
 ): React.CSSProperties => ({
   fontSize: 12 * fontScale,
   background: isDeleted
     ? '#291415'
     : isMentionedSelf
     ? '#bd8700'
+    : isRaider
+    ? '#1e3a5f'
     : '#111827',
   borderRadius: 4,
   padding: '2px 4px',
@@ -1806,7 +1812,7 @@ const messageStyle = (
   gap: 4,
   opacity: isDeleted ? 0.7 : isCleared ? 0.6 : 1,
   cursor: 'context-menu',
-  borderLeft: isDeleted ? '3px solid #ef4444' : '3px solid transparent',
+  borderLeft: isDeleted ? '3px solid #ef4444' : isRaider ? '3px solid #3b82f6' : '3px solid transparent',
   textDecoration: 'none'
 });
 
