@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
 import type { ChatPane, ChatMessage } from '../views/ChatArea';
 
 interface ChatModes {
@@ -43,7 +44,7 @@ interface ChatStore {
 const recentSystemMessages = new Set<string>();
 const modeChangeTimestamps: Record<string, number> = {};
 
-export const useChatStore = create<ChatStore>((set, get) => ({
+export const useChatStore = create<ChatStore>()(devtools((set, get) => ({
   panes: [],
   roomModes: {},
   selectedChannel: null,
@@ -97,6 +98,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   markModeChanged: (channel) => {
     modeChangeTimestamps[channel.toLowerCase()] = Date.now();
   }
-}));
+}), { name: 'ChatStore' }));
 
 export { modeChangeTimestamps };

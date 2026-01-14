@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
 import type { UserLogMessage } from '../components/UserMessageLog';
 
 export interface GlobalUserData {
@@ -33,7 +34,7 @@ interface UserStore {
   setActiveChatters: (chatters: Record<string, Map<string, ActiveChatter>> | ((prev: Record<string, Map<string, ActiveChatter>>) => Record<string, Map<string, ActiveChatter>>)) => void;
 }
 
-export const useUserStore = create<UserStore>((set) => ({
+export const useUserStore = create<UserStore>()(devtools((set) => ({
   globalUsers: {},
   activeChatters: {},
   
@@ -44,4 +45,4 @@ export const useUserStore = create<UserStore>((set) => ({
   setActiveChatters: (chatters) => set((state) => ({
     activeChatters: typeof chatters === 'function' ? chatters(state.activeChatters) : chatters
   }))
-}));
+}), { name: 'UserStore' }));

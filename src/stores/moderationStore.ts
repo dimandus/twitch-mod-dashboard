@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
 import type { UserLogData } from '../components/UserMessageLog';
 
 interface ModerationStore {
@@ -16,7 +17,7 @@ interface ModerationStore {
   closeUserProfile: () => void;
 }
 
-export const useModerationStore = create<ModerationStore>((set) => ({
+export const useModerationStore = create<ModerationStore>()(devtools((set) => ({
   userLogOpen: null,
   userProfileLogin: null,
   autoModQueueOpen: false,
@@ -43,4 +44,4 @@ export const useModerationStore = create<ModerationStore>((set) => ({
   },
   
   closeUserProfile: () => set({ userProfileLogin: null })
-}));
+}), { name: 'ModerationStore' }));

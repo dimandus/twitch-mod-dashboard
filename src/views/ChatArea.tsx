@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 
 // =====================================================
 // Типы
@@ -779,16 +780,7 @@ const applyCommandSuggestion = (paneId: string) => {
     });
   };
 
-  // Auto-scroll
-  useEffect(() => {
-    chatPanes.forEach((pane) => {
-      if (pane.paused) return;
-      // Пропускаем скролл, если клавиша зажата и курсор на этой панели
-      if (hoverPauseKeyPressed && hoveredPaneId === pane.id) return;
-      const el = scrollContainersRef.current[pane.id];
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-  }, [chatPanes, hoverPauseKeyPressed, hoveredPaneId]);
+  // Auto-scroll убран - Virtuoso управляет скроллом через followOutput
 
   // Context Menu
   const handleMessageContextMenu = (
@@ -1248,113 +1240,108 @@ const applyCommandSuggestion = (paneId: string) => {
                 </div>
 
                 {/* MESSAGES */}
-                <div
+                <Virtuoso
                   ref={(el) => {
-                    scrollContainersRef.current[pane.id] = el;
+                    if (el) {
+                      scrollContainersRef.current[pane.id] = el as any;
+                    }
                   }}
                   style={messagesContainerStyle}
-                >
-                  {pane.messages.length === 0 ? (
-                    <div style={{ fontSize: 12 * textScale, color: '#6b7280' }}>
-                      Сообщений пока нет.
-                    </div>
-                  ) : (
-                    pane.messages.map((m) => {
-                      if (m.isSystem) {
-                        return (
-                          <div key={m.id} style={systemMessageStyle(textScale)}>
-                            {m.text}
-                          </div>
-                        );
-                      }
-
-                      const isDeleted = !!m.deleted;
-                      const isCleared = !!m.cleared && !isDeleted;
-                      const isMentionedSelf = !!m.mentionedSelf;
-                      const isRaider = !!m.isRaider;
-                      const isFirstMessage = !!m.isFirstMessage;
-                      // Сообщение из shared chat только если есть source-room-id (значит из другого канала)
-                      const isSharedChat = !!m.sourceRoomId;
-
+                  data={pane.messages}
+                  followOutput={!pane.paused && !(hoverPauseKeyPressed && hoveredPaneId === pane.id)}
+                  itemContent={(index, m) => {
+                    if (m.isSystem) {
                       return (
-                        <div
-                          key={m.msgId || m.id}
-                          onContextMenu={(e) =>
-                            handleMessageContextMenu(
-                              e,
-                              pane.channel,
-                              m
-                            )
-                          }
-                          data-msg-id={m.msgId}
-                          style={messageStyle(
-                            isDeleted,
-                            isCleared,
-                            isMentionedSelf,
-                            textScale,
-                            isRaider,
-                            isFirstMessage
-                          )}
-                        >
-                          <div
-                            style={{
-                              display: 'flex',
-                              gap: 2,
-                              flexShrink: 0
-                            }}
-                          >
-                            {renderBadges(
-                              m.badges,
-                              m.badgeVersions,
-                              m.badgeInfo,
-                              badgeSets
-                            )}
-                          </div>
-                          <span
-                            style={usernameStyle(
-                              isDeleted,
-                              isCleared,
-                              m.color,
-                              textScale
-                            )}
-                          >
-                            {m.displayName || m.userLogin}:
-                          </span>
-                          {isSharedChat && (
-                            <span
-                              style={{
-                                fontSize: 9 * textScale,
-                                color: '#a78bfa',
-                                backgroundColor: '#2e1065',
-                                padding: '1px 4px',
-                                borderRadius: 3,
-                                fontWeight: 600,
-                                marginRight: 4
-                              }}
-                              title={`Сообщение из другого канала коллаборации${m.sourceChannelName ? `: ${m.sourceChannelName}` : ''}`}
-                            >
-                              🔗{m.sourceChannelName || ''}
-                            </span>
-                          )}
-                          <span
-                            style={messageTextStyle(
-                              isDeleted,
-                              isCleared,
-                              textScale
-                            )}
-                          >
-                            {renderMessageWithEmotes(m.text, m.emotes)}
-                          </span>
-                          {isDeleted && (
-                            <span style={deletedLabelStyle}>
-                              [удалено]
-                            </span>
-                          )}
+                        <div style={systemMessageStyle(textScale)}>
+                          {m.text}
                         </div>
                       );
-                    })
-                  )}
-                </div>
+                    }
+
+                    const isDeleted = !!m.deleted;
+                    const isCleared = !!m.cleared && !isDeleted;
+                    const isMentionedSelf = !!m.mentionedSelf;
+                    const isRaider = !!m.isRaider;
+                    const isFirstMessage = !!m.isFirstMessage;
+                    const isSharedChat = !!m.sourceRoomId;
+
+                    return (
+                      <div
+                        onContextMenu={(e) =>
+                          handleMessageContextMenu(
+                            e,
+                            pane.channel,
+                            m
+                          )
+                        }
+                        data-msg-id={m.msgId}
+                        style={messageStyle(
+                          isDeleted,
+                          isCleared,
+                          isMentionedSelf,
+                          textScale,
+                          isRaider,
+                          isFirstMessage
+                        )}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 2,
+                            flexShrink: 0
+                          }}
+                        >
+                          {renderBadges(
+                            m.badges,
+                            m.badgeVersions,
+                            m.badgeInfo,
+                            badgeSets
+                          )}
+                        </div>
+                        <span
+                          style={usernameStyle(
+                            isDeleted,
+                            isCleared,
+                            m.color,
+                            textScale
+                          )}
+                        >
+                          {m.displayName || m.userLogin}:
+                        </span>
+                        {isSharedChat && (
+                          <span
+                            style={{
+                              fontSize: 9 * textScale,
+                              color: '#a78bfa',
+                              backgroundColor: '#2e1065',
+                              padding: '1px 4px',
+                              borderRadius: 3,
+                              fontWeight: 600,
+                              marginRight: 4
+                            }}
+                            title={`Сообщение из другого канала коллаборации${m.sourceChannelName ? `: ${m.sourceChannelName}` : ''}`}
+                          >
+                            🔗{m.sourceChannelName || ''}
+                          </span>
+                        )}
+                        <span
+                          style={messageTextStyle(
+                            isDeleted,
+                            isCleared,
+                            textScale
+                          )}
+                        >
+                          {renderMessageWithEmotes(m.text, m.emotes)}
+                        </span>
+                        {isDeleted && (
+                          <span style={deletedLabelStyle}>
+                            [удалено]
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
 
                 {/* Упоминания */}
                 {mentionState && mentionState.paneId === pane.id && (
