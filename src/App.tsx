@@ -887,17 +887,20 @@ setActiveChatters((prev) => {
         // Notice события (рейды, хосты, подписки и т.д.)
         twitchChatClient.onNotice(({ channel, msgId, message }) => {
           const msgLower = message.toLowerCase();
-          let text = '';
           
           // Игнорируем notice о режимах чата (они обрабатываются через roomstate)
           if (msgLower.includes('emote-only') || 
               msgLower.includes('slow mode') || 
+              msgLower.includes('slow-mode') ||
               msgLower.includes('followers-only') ||
               msgLower.includes('subscribers-only') ||
+              msgLower.includes('subscriber-only') ||
               msgLower.includes('r9k') ||
               msgLower.includes('unique-chat')) {
             return;
           }
+          
+          let text = '';
           
           // Рейды
           if (msgId === 'raid' || msgLower.includes('raid')) {
@@ -994,39 +997,38 @@ setActiveChatters((prev) => {
           }
 
           setRoomModes((prev) => {
-            const existing = prev[chanLower] || defaultModes;
+            const chanLower = channel.toLowerCase();
             const isFirstTime = !initializedChannels.current.has(chanLower);
+            const existing = prev[chanLower];
 
-            const base = {
-              ...existing,
-              slow: slowEnabled,
-              slowDuration,
-              emote: parseBool(state['emote-only']),
-              subs: parseBool(state['subs-only']),
-              unique: parseBool(state.r9k)
-            };
+            // Новые значения из IRC (только если определены)
+            const newSlow = state.slow !== undefined ? slowEnabled : existing?.slow ?? false;
+            const newSlowDuration = state.slow !== undefined ? slowDuration : existing?.slowDuration ?? 0;
+            const newEmote = state['emote-only'] !== undefined ? parseBool(state['emote-only']) : existing?.emote ?? false;
+            const newSubs = state['subs-only'] !== undefined ? parseBool(state['subs-only']) : existing?.subs ?? false;
+            const newUnique = state.r9k !== undefined ? parseBool(state.r9k) : existing?.unique ?? false;
 
-            // Показываем плашки при изменении режимов (только если не игнорируем IRC и канал уже инициализирован)
-            if (!ignoreIRC && !isFirstTime && existing) {
-              if (existing.slow !== slowEnabled) {
-                const msg = slowEnabled 
-                  ? `⏱️ Медленный режим включен (${slowDuration}с)`
+            // Показываем плашки при изменении режимов (кроме первой инициализации)
+            if (!isFirstTime && existing) {
+              if (state.slow !== undefined && existing.slow !== newSlow) {
+                const msg = newSlow 
+                  ? `⏱️ Медленный режим включен (${newSlowDuration}с)`
                   : '⏱️ Медленный режим выключен';
                 addSystemMessage(chanLower, msg);
               }
-              if (existing.emote !== parseBool(state['emote-only'])) {
-                const msg = parseBool(state['emote-only']) ? '😊 Режим только эмодзи включен' : '😊 Режим только эмодзи выключен';
+              if (state['emote-only'] !== undefined && existing.emote !== newEmote) {
+                const msg = newEmote ? '😊 Режим только эмодзи включен' : '😊 Режим только эмодзи выключен';
                 addSystemMessage(chanLower, msg);
               }
-              if (existing.subs !== parseBool(state['subs-only'])) {
-                const msg = parseBool(state['subs-only']) ? '⭐ Режим только для подписчиков включен' : '⭐ Режим только для подписчиков выключен';
+              if (state['subs-only'] !== undefined && existing.subs !== newSubs) {
+                const msg = newSubs ? '⭐ Режим только для подписчиков включен' : '⭐ Режим только для подписчиков выключен';
                 addSystemMessage(chanLower, msg);
               }
-              if (existing.unique !== parseBool(state.r9k)) {
-                const msg = parseBool(state.r9k) ? '🔄 Режим уникальных сообщений включен' : '🔄 Режим уникальных сообщений выключен';
+              if (state.r9k !== undefined && existing.unique !== newUnique) {
+                const msg = newUnique ? '🔄 Режим уникальных сообщений включен' : '🔄 Режим уникальных сообщений выключен';
                 addSystemMessage(chanLower, msg);
               }
-              if (existing.followers !== followersEnabled) {
+              if (!ignoreIRC && state['followers-only'] !== undefined && existing.followers !== followersEnabled) {
                 const msg = followersEnabled 
                   ? `👥 Режим только для фолловеров включен (${followersDuration}м)`
                   : '👥 Режим только для фолловеров выключен';
@@ -1039,21 +1041,22 @@ setActiveChatters((prev) => {
               initializedChannels.current.add(chanLower);
             }
 
-            if (ignoreIRC) {
-              return {
-                ...prev,
-                [chanLower]: base
-              };
-            }
+            // Мержим с существующими значениями
+            const base = {
+              slow: newSlow,
+              slowDuration: newSlowDuration,
+              emote: newEmote,
+              subs: newSubs,
+              unique: newUnique,
+              // followers и shield обновляются только если не ignoreIRC
+              followers: ignoreIRC ? (existing?.followers ?? false) : followersEnabled,
+              followersDuration: ignoreIRC ? (existing?.followersDuration ?? -1) : followersDuration,
+              shield: existing?.shield ?? false
+            };
 
             return {
               ...prev,
-              [chanLower]: {
-                ...base,
-                followers: followersEnabled,
-                followersDuration,
-                shield: existing.shield
-              }
+              [chanLower]: base
             };
           });
         });
