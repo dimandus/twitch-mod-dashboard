@@ -32,6 +32,9 @@ const SettingsView: React.FC = () => {
   const [fontScaleMax, setFontScaleMax] = useState<number>(1.5);
   const [globalScaleMin, setGlobalScaleMin] = useState<number>(0.7);
   const [globalScaleMax, setGlobalScaleMax] = useState<number>(1.5);
+  
+  // Кнопка для временной паузы скролла
+  const [hoverPauseKey, setHoverPauseKey] = useState<string>('Alt');
 
   // =====================================================
   // Загрузка настроек
@@ -52,7 +55,8 @@ const SettingsView: React.FC = () => {
         fsMin,
         fsMax,
         gsMin,
-        gsMax
+        gsMax,
+        hpKey
       ] = await Promise.all([
         window.electronAPI.config.get('twitch.clientId'),
         window.electronAPI.config.get('twitch.clientSecret'),
@@ -62,7 +66,8 @@ const SettingsView: React.FC = () => {
         window.electronAPI.config.get('ui.chat.fontScaleMin'),
         window.electronAPI.config.get('ui.chat.fontScaleMax'),
         window.electronAPI.config.get('ui.chat.globalScaleMin'),
-        window.electronAPI.config.get('ui.chat.globalScaleMax')
+        window.electronAPI.config.get('ui.chat.globalScaleMax'),
+        window.electronAPI.config.get('ui.chat.hoverPauseKey')
       ]);
 
       if (cid) setClientId(cid);
@@ -75,6 +80,7 @@ const SettingsView: React.FC = () => {
       if (typeof fsMax === 'number') setFontScaleMax(fsMax);
       if (typeof gsMin === 'number') setGlobalScaleMin(gsMin);
       if (typeof gsMax === 'number') setGlobalScaleMax(gsMax);
+      if (typeof hpKey === 'string') setHoverPauseKey(hpKey);
     } catch (err) {
       console.error('Ошибка загрузки настроек', err);
     }
@@ -110,6 +116,15 @@ const SettingsView: React.FC = () => {
       showMessage('API ключи сохранены', 'success');
     } catch (err: any) {
       showMessage(err?.message || 'Ошибка сохранения API ключей', 'error');
+    }
+  };
+
+  const saveHoverPauseKey = async () => {
+    try {
+      await window.electronAPI.config.set('ui.chat.hoverPauseKey', hoverPauseKey);
+      showMessage('Кнопка для паузы скролла сохранена', 'success');
+    } catch (err: any) {
+      showMessage(err?.message || 'Ошибка сохранения кнопки', 'error');
     }
   };
 
@@ -455,6 +470,33 @@ const SettingsView: React.FC = () => {
 
               <button onClick={saveUiScaleLimits} style={buttonPrimaryStyle}>
                 💾 Сохранить границы масштабирования
+              </button>
+            </div>
+          </section>
+
+          <section style={sectionStyle}>
+            <h3 style={sectionTitleStyle}>⌨️ Управление скроллом</h3>
+            <p style={hintStyle}>
+              Выбери клавишу, при зажатии которой наведение курсора на чат будет временно останавливать автоскролл.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Клавиша для паузы скролла при наведении:</label>
+                <select
+                  value={hoverPauseKey}
+                  onChange={(e) => setHoverPauseKey(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="Alt">Alt</option>
+                  <option value="Control">Ctrl</option>
+                  <option value="Shift">Shift</option>
+                  <option value="Meta">Meta (Win/Cmd)</option>
+                </select>
+              </div>
+
+              <button onClick={saveHoverPauseKey} style={buttonPrimaryStyle}>
+                💾 Сохранить кнопку
               </button>
             </div>
           </section>

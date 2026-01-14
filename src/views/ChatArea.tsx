@@ -180,6 +180,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [paneWidth, setPaneWidth] = useState(320);
   const [paneHeight, setPaneHeight] = useState(260);
 
+  const [hoveredPaneId, setHoveredPaneId] = useState<string | null>(null);
+  const [hoverPauseKeyPressed, setHoverPauseKeyPressed] = useState(false);
+  const [hoverPauseKey, setHoverPauseKey] = useState('Alt');
+
   const scrollContainersRef = useRef<Record<string, HTMLDivElement | null>>({});
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -227,6 +231,39 @@ const [commandState, setCommandState] = useState<{
 
   // Использование эмотов
   const [emoteUsage, setEmoteUsage] = useState<Record<string, number>>({});
+
+  // Загрузка клавиши для паузы скролла
+  useEffect(() => {
+    (async () => {
+      try {
+        const key = await window.electronAPI.config.get('ui.chat.hoverPauseKey');
+        if (typeof key === 'string') setHoverPauseKey(key);
+      } catch (err) {
+        logger.warn('[ChatArea] не удалось загрузить клавишу паузы', err);
+      }
+    })();
+  }, []);
+
+  // Отслеживание нажатия клавиши
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === hoverPauseKey) {
+        setHoverPauseKeyPressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === hoverPauseKey) {
+        setHoverPauseKeyPressed(false);
+        setHoveredPaneId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [hoverPauseKey]);
 
   // Загрузка глобальных бейджей через Helix
   useEffect(() => {
@@ -745,10 +782,12 @@ const applyCommandSuggestion = (paneId: string) => {
   useEffect(() => {
     chatPanes.forEach((pane) => {
       if (pane.paused) return;
+      // Пропускаем скролл, если клавиша зажата и курсор на этой панели
+      if (hoverPauseKeyPressed && hoveredPaneId === pane.id) return;
       const el = scrollContainersRef.current[pane.id];
       if (el) el.scrollTop = el.scrollHeight;
     });
-  }, [chatPanes]);
+  }, [chatPanes, hoverPauseKeyPressed, hoveredPaneId]);
 
   // Context Menu
   const handleMessageContextMenu = (
@@ -995,6 +1034,8 @@ const applyCommandSuggestion = (paneId: string) => {
                 onClick={() => onSelectChannel(pane.channel)}
                 onDragOver={handlePaneDragOver}
                 onDrop={(e) => handlePaneDrop(e, pane.id)}
+                onMouseEnter={() => setHoveredPaneId(pane.id)}
+                onMouseLeave={() => setHoveredPaneId(null)}
                 style={chatPaneStyle(
                   scaledPaneWidth,
                   scaledPaneHeight,
