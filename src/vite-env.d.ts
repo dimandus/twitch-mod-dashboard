@@ -143,6 +143,9 @@ interface TwitchAPI {
     text: string
   ): Promise<{ messageId: string }>;
 
+  // Обновление токена
+  ensureAccessToken: () => Promise<string | null>;
+
   // =====================================================
   // МОДЕРАЦИЯ (НОВОЕ)
   // =====================================================

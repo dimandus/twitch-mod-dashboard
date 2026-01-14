@@ -36,6 +36,26 @@ export type NoticeHandler = (params: {
 
 export type AuthErrorHandler = () => void;
 
+export type UserBanHandler = (params: {
+  channel: string;
+  username: string;
+  reason?: string;
+}) => void;
+
+export type UserTimeoutHandler = (params: {
+  channel: string;
+  username: string;
+  duration: number;
+  reason?: string;
+}) => void;
+
+export type ModActionHandler = (params: {
+  channel: string;
+  action: string;
+  args?: string[];
+  moderator?: string;
+}) => void;
+
 // =====================================================
 // Класс TwitchChatClient
 // =====================================================
@@ -51,6 +71,9 @@ export class TwitchChatClient {
   private roomStateHandlers = new Set<RoomStateHandler>();
   private noticeHandlers = new Set<NoticeHandler>();
   private authErrorHandlers = new Set<AuthErrorHandler>();
+  private banHandlers = new Set<UserBanHandler>();
+  private timeoutHandlers = new Set<UserTimeoutHandler>();
+  private modActionHandlers = new Set<ModActionHandler>();
 
   private currentUsername: string = '';
 
@@ -148,6 +171,28 @@ export class TwitchChatClient {
       const banDuration = t['ban-duration']
         ? parseInt(t['ban-duration'] as string, 10)
         : undefined;
+
+      // Если есть username и banDuration, это таймаут
+      if (username && banDuration !== undefined) {
+        for (const h of this.timeoutHandlers) {
+          h({
+            channel: loginChan,
+            username,
+            duration: banDuration,
+            reason: t['ban-reason']
+          });
+        }
+      }
+      // Если есть username но нет banDuration, это бан
+      else if (username && banDuration === undefined) {
+        for (const h of this.banHandlers) {
+          h({
+            channel: loginChan,
+            username,
+            reason: t['ban-reason']
+          });
+        }
+      }
 
       for (const h of this.clearHandlers) {
         h({
@@ -299,6 +344,21 @@ export class TwitchChatClient {
     return () => this.authErrorHandlers.delete(handler);
   }
 
+  onUserBan(handler: UserBanHandler): () => void {
+    this.banHandlers.add(handler);
+    return () => this.banHandlers.delete(handler);
+  }
+
+  onUserTimeout(handler: UserTimeoutHandler): () => void {
+    this.timeoutHandlers.add(handler);
+    return () => this.timeoutHandlers.delete(handler);
+  }
+
+  onModAction(handler: ModActionHandler): () => void {
+    this.modActionHandlers.add(handler);
+    return () => this.modActionHandlers.delete(handler);
+  }
+
   async disconnect(): Promise<void> {
     if (!this.client) return;
     try {
@@ -314,6 +374,9 @@ export class TwitchChatClient {
     this.roomStateHandlers.clear();
     this.noticeHandlers.clear();
     this.authErrorHandlers.clear();
+    this.banHandlers.clear();
+    this.timeoutHandlers.clear();
+    this.modActionHandlers.clear();
     console.log('[TwitchChatClient] disconnected');
   }
 

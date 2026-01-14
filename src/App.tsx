@@ -8,6 +8,8 @@ import UserMessageLog, {
 import UserProfileModal from './components/UserProfileModal';
 import { twitchChatClient } from './chat/TwitchChatClient';
 import type { ChatPane, ChatMessage } from './views/ChatArea';
+import { handleModCommand } from './commands/ModCommands';
+import { createSystemMessage } from './utils/chatSystemMessages';
 
 type Tab = 'dashboard' | 'settings';
 
@@ -74,6 +76,7 @@ const App: React.FC = () => {
   const [currentUserLogin, setCurrentUserLogin] = useState<string | null>(null);
   const joinedRef = useRef<Set<string>>(new Set());
   const modeChangeTimestamps = useRef<Record<string, number>>({});
+  const initializedChannels = useRef<Set<string>>(new Set());
   const pendingSelfMessagesRef = useRef<
     Record<string, PendingSelfMessage[]>
   >({});
@@ -95,6 +98,34 @@ const App: React.FC = () => {
   const [userLogOpen, setUserLogOpen] = useState<UserLogData | null>(null);
   const [userProfileLogin, setUserProfileLogin] = useState<string | null>(null);
 
+  // Дедупликация системных сообщений
+  const recentSystemMessages = useRef<Set<string>>(new Set());
+
+  const addSystemMessage = (channel: string, text: string) => {
+    const key = `${channel}:${text}:${Date.now()}`;
+    const shortKey = `${channel}:${text}`;
+    
+    // Проверяем, не было ли такое сообщение в последние 2 секунды
+    if (recentSystemMessages.current.has(shortKey)) {
+      return;
+    }
+    
+    recentSystemMessages.current.add(shortKey);
+    setTimeout(() => recentSystemMessages.current.delete(shortKey), 2000);
+    
+    const systemMsg = createSystemMessage(text);
+    setChatPanes((prev) =>
+      prev.map((p) => {
+        if (p.channel.toLowerCase() !== channel.toLowerCase()) return p;
+        return {
+          ...p,
+          messages: [...p.messages, systemMsg],
+          buffer: p.paused ? [...p.buffer, systemMsg] : p.buffer
+        };
+      })
+    );
+  };
+
   const markModeChanged = (channel: string) => {
     modeChangeTimestamps.current[channel.toLowerCase()] = Date.now();
   };
@@ -108,147 +139,39 @@ const App: React.FC = () => {
     const trimmed = text.trim();
     if (!chanLower || !trimmed) return;
 
-    // Если это /команда — парсим и вызываем Helix или IRC
+    // Если это /команда — парсим и вызываем обработчик команд
     if (trimmed.startsWith('/')) {
       const [cmd, ...args] = trimmed.slice(1).split(' ');
 
       try {
-        switch (cmd.toLowerCase()) {
-          case 'clear':
-            await window.electronAPI.twitch.clearChat(chanLower);
-            return;
+        // Пытаемся обработать как модераторскую команду
+        const result = await handleModCommand(
+          chanLower,
+          cmd,
+          args,
+          window.electronAPI.twitch
+        );
 
-          case 'slow':
-            {
-              let seconds = parseInt(args[0], 10) || 0;
-              if (seconds > 0 && seconds < 10) {
-                // Через IRC (Twitch Helix не поддерживает <10)
-                await twitchChatClient.sendMessage(chanLower, `/slow ${seconds}`);
-              } else {
-                await window.electronAPI.twitch.slowMode(chanLower, true, seconds);
-              }
-            }
-            return;
-
-          case 'slowoff':
-            await window.electronAPI.twitch.slowMode(chanLower, false, 0);
-            return;
-
-          case 'followers':
-            {
-              let minutes = -1;
-              if (args[0]) {
-                const match = args[0].match(/^(\d+)([mhdw]?)$/i);
-                if (match) {
-                  const num = parseInt(match[1], 10);
-                  const unit = match[2]?.toLowerCase();
-                  if (unit === 'm' || !unit) minutes = num;
-                  else if (unit === 'h') minutes = num * 60;
-                  else if (unit === 'd') minutes = num * 60 * 24;
-                  else if (unit === 'w') minutes = num * 60 * 24 * 7;
-                }
-              }
-              await window.electronAPI.twitch.followersOnly(chanLower, true, minutes);
-            }
-            return;
-
-          case 'followersoff':
-            await window.electronAPI.twitch.followersOnly(chanLower, false, 0);
-            return;
-
-          case 'subscribers':
-            await window.electronAPI.twitch.subscribersOnly(chanLower, true);
-            return;
-
-          case 'subscribersoff':
-            await window.electronAPI.twitch.subscribersOnly(chanLower, false);
-            return;
-
-          case 'emoteonly':
-            await window.electronAPI.twitch.emoteOnly(chanLower, true);
-            return;
-
-          case 'emoteonlyoff':
-            await window.electronAPI.twitch.emoteOnly(chanLower, false);
-            return;
-
-          case 'uniquechat':
-          case 'r9kbeta':
-            await window.electronAPI.twitch.updateChatSettings(chanLower, { unique_chat_mode: true });
-            return;
-
-          case 'uniquechatoff':
-          case 'r9kbetaoff':
-            await window.electronAPI.twitch.updateChatSettings(chanLower, { unique_chat_mode: false });
-            return;
-
-          case 'ban':
-            if (args[0]) {
-              const login = args[0];
-              const reason = args.slice(1).join(' ') || '';
-              await window.electronAPI.twitch.banUser(chanLower, login, null, reason);
-            }
-            return;
-
-          case 'timeout':
-            if (args[0]) {
-              const login = args[0];
-              const duration = parseInt(args[1], 10) || 600;
-              const reason = args.slice(2).join(' ') || '';
-              await window.electronAPI.twitch.timeoutUser(chanLower, login, duration, reason);
-            }
-            return;
-
-          case 'unban':
-            if (args[0]) {
-              const login = args[0];
-              await window.electronAPI.twitch.unbanUser(chanLower, login);
-            }
-            return;
-
-          case 'announce':
-            if (args.length > 0) {
-              // /announce [color] message
-              let color: any = 'primary';
-              let message = args.join(' ');
-              if (
-                ['blue', 'green', 'orange', 'purple', 'primary'].includes(
-                  args[0]?.toLowerCase()
-                )
-              ) {
-                color = args[0].toLowerCase();
-                message = args.slice(1).join(' ');
-              }
-              await window.electronAPI.twitch.sendAnnouncement(chanLower, message, color);
-            }
-            return;
-
-          // Команды, которые работают только через IRC (и не поддерживаются Helix)
-          case 'me':
-          case 'mod':
-          case 'unmod':
-          case 'vip':
-          case 'unvip':
-          case 'host':
-          case 'unhost':
-          case 'raid':
-          case 'unraid':
-          case 'w':
-          case 'color':
-          case 'block':
-          case 'unblock':
-          case 'ignore':
-          case 'unignore':
-          case 'delete':
-          case 'untimeout':
-            await twitchChatClient.sendMessage(chanLower, trimmed);
-            return;
-
-          default:
-            // Любая неизвестная команда — через IRC (может не сработать)
-            await twitchChatClient.sendMessage(chanLower, trimmed);
-            return;
+        if (result.handled) {
+          // Если есть системное сообщение, добавляем его в чат
+          if (result.systemMessage) {
+            const systemMsg = createSystemMessage(result.systemMessage);
+            setChatPanes((prev) =>
+              prev.map((p) => {
+                if (p.channel.toLowerCase() !== chanLower) return p;
+                return {
+                  ...p,
+                  messages: [...p.messages, systemMsg],
+                  buffer: p.paused ? [...p.buffer, systemMsg] : p.buffer
+                };
+              })
+            );
+          }
+          return; // Команда обработана
         }
+
+        // Если команда не обработана, отправляем как есть через IRC
+        await twitchChatClient.sendMessage(chanLower, trimmed);
       } catch (err) {
         console.error('[App] Ошибка выполнения команды:', trimmed, err);
       }
@@ -689,6 +612,21 @@ const App: React.FC = () => {
           const mentionedSelf =
             !!selfLogin &&
             message.toLowerCase().includes('@' + selfLogin);
+          
+          // Если упомянули текущего пользователя, показываем системное сообщение
+          if (mentionedSelf && selfLogin && tags.username?.toLowerCase() !== selfLogin.toLowerCase() && !self) {
+            const systemMsg = createSystemMessage(`@${tags.username || tags['display-name'] || 'пользователь'} упомянул вас`);
+            setChatPanes((prev) =>
+              prev.map((p) => {
+                if (p.channel.toLowerCase() !== chanLower) return p;
+                return {
+                  ...p,
+                  messages: [...p.messages, systemMsg],
+                  buffer: p.paused ? [...p.buffer, systemMsg] : p.buffer
+                };
+              })
+            );
+          }
 
           const msg = buildChatMessage(
             channel,
@@ -793,6 +731,23 @@ setActiveChatters((prev) => {
             markMessageAsDeleted(channel, targetMsgId);
           }
         );
+
+        // Обработка событий бана
+        twitchChatClient.onUserBan(({ channel, username, reason }) => {
+          const msg = reason 
+            ? `⛔ ${username} забанен. Причина: ${reason}`
+            : `⛔ ${username} забанен`;
+          addSystemMessage(channel, msg);
+        });
+
+        // Обработка событий таймаута
+        twitchChatClient.onUserTimeout(({ channel, username, duration, reason }) => {
+          const timeStr = duration >= 60 ? `${Math.floor(duration / 60)}м` : `${duration}с`;
+          const msg = reason
+            ? `⏱️ ${username} получил таймаут на ${timeStr}. Причина: ${reason}`
+            : `⏱️ ${username} получил таймаут на ${timeStr}`;
+          addSystemMessage(channel, msg);
+        });
 
         // CLEARCHAT: очистка/бан/таймаут
         twitchChatClient.onUserClearchat(
@@ -929,6 +884,77 @@ setActiveChatters((prev) => {
         // Подписываемся на ошибки аутентификации
         twitchChatClient.onAuthError(handleAuthError);
 
+        // Notice события (рейды, хосты, подписки и т.д.)
+        twitchChatClient.onNotice(({ channel, msgId, message }) => {
+          const msgLower = message.toLowerCase();
+          let text = '';
+          
+          // Игнорируем notice о режимах чата (они обрабатываются через roomstate)
+          if (msgLower.includes('emote-only') || 
+              msgLower.includes('slow mode') || 
+              msgLower.includes('followers-only') ||
+              msgLower.includes('subscribers-only') ||
+              msgLower.includes('r9k') ||
+              msgLower.includes('unique-chat')) {
+            return;
+          }
+          
+          // Рейды
+          if (msgId === 'raid' || msgLower.includes('raid')) {
+            const raidMatch = message.match(/raid\s+from\s+(\w+)/i) || 
+                             message.match(/(\w+)\s+is\s+raiding/i) ||
+                             message.match(/(\w+)\s+raided/i);
+            if (raidMatch) {
+              const raider = raidMatch[1];
+              const viewerMatch = message.match(/(\d+)\s+viewer/i);
+              const viewers = viewerMatch ? parseInt(viewerMatch[1], 10) : null;
+              const viewerText = viewers ? ` с ${viewers} зрителями` : '';
+              text = `⚔️ Рейд от ${raider}${viewerText}`;
+            }
+          }
+          // Хосты
+          else if (msgId === 'host_on' || msgLower.includes('hosting')) {
+            const hostMatch = message.match(/hosting\s+(\w+)/i) ||
+                             message.match(/(\w+)\s+is\s+now\s+hosting/i);
+            if (hostMatch) {
+              const hoster = hostMatch[1];
+              text = `📺 Хост от ${hoster}`;
+            }
+          }
+          // Завершение хоста
+          else if (msgId === 'host_off' || msgLower.includes('hosting ended')) {
+            text = '📺 Хост завершен';
+          }
+          // Подписки
+          else if (msgId === 'sub' || msgId === 'resub' || msgLower.includes('subscribed') || msgLower.includes('resubscribed')) {
+            text = `⭐ ${message}`;
+          }
+          // Подарочные подписки
+          else if (msgId === 'subgift' || msgId === 'submysterygift' || msgLower.includes('gifted')) {
+            text = `🎁 ${message}`;
+          }
+          // Битсы
+          else if (msgId === 'bitsbadgetier' || msgLower.includes('bits') || msgLower.includes('cheer')) {
+            text = `💎 ${message}`;
+          }
+          // Ритуалы (первое сообщение)
+          else if (msgId === 'ritual' || msgLower.includes('ritual')) {
+            text = `🎉 ${message}`;
+          }
+          // Анонсы
+          else if (msgId === 'announcement' || msgLower.includes('announcement')) {
+            text = `📢 ${message}`;
+          }
+          // Все остальные notice события
+          else if (message && message.trim()) {
+            text = `ℹ️ ${message}`;
+          }
+          
+          if (text) {
+            addSystemMessage(channel, text);
+          }
+        });
+
         // Room state
         twitchChatClient.onRoomState(({ channel, state }) => {
           const chanLower = channel.toLowerCase();
@@ -969,6 +995,7 @@ setActiveChatters((prev) => {
 
           setRoomModes((prev) => {
             const existing = prev[chanLower] || defaultModes;
+            const isFirstTime = !initializedChannels.current.has(chanLower);
 
             const base = {
               ...existing,
@@ -978,6 +1005,39 @@ setActiveChatters((prev) => {
               subs: parseBool(state['subs-only']),
               unique: parseBool(state.r9k)
             };
+
+            // Показываем плашки при изменении режимов (только если не игнорируем IRC и канал уже инициализирован)
+            if (!ignoreIRC && !isFirstTime && existing) {
+              if (existing.slow !== slowEnabled) {
+                const msg = slowEnabled 
+                  ? `⏱️ Медленный режим включен (${slowDuration}с)`
+                  : '⏱️ Медленный режим выключен';
+                addSystemMessage(chanLower, msg);
+              }
+              if (existing.emote !== parseBool(state['emote-only'])) {
+                const msg = parseBool(state['emote-only']) ? '😊 Режим только эмодзи включен' : '😊 Режим только эмодзи выключен';
+                addSystemMessage(chanLower, msg);
+              }
+              if (existing.subs !== parseBool(state['subs-only'])) {
+                const msg = parseBool(state['subs-only']) ? '⭐ Режим только для подписчиков включен' : '⭐ Режим только для подписчиков выключен';
+                addSystemMessage(chanLower, msg);
+              }
+              if (existing.unique !== parseBool(state.r9k)) {
+                const msg = parseBool(state.r9k) ? '🔄 Режим уникальных сообщений включен' : '🔄 Режим уникальных сообщений выключен';
+                addSystemMessage(chanLower, msg);
+              }
+              if (existing.followers !== followersEnabled) {
+                const msg = followersEnabled 
+                  ? `👥 Режим только для фолловеров включен (${followersDuration}м)`
+                  : '👥 Режим только для фолловеров выключен';
+                addSystemMessage(chanLower, msg);
+              }
+            }
+
+            // Помечаем канал как инициализированный
+            if (isFirstTime) {
+              initializedChannels.current.add(chanLower);
+            }
 
             if (ignoreIRC) {
               return {
@@ -1058,7 +1118,7 @@ setActiveChatters((prev) => {
               console.warn('[App] не удалось обновить токен Twitch через Helix', e);
             }
 
-            if (token) {
+            if (token && user) {
               // Подключаемся к чату
               await twitchChatClient.connect(user.login, token);
               
