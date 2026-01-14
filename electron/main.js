@@ -56,6 +56,17 @@ function getHelixHeaders() {
   };
 }
 
+// Helper для отправки уведомлений
+function sendNotification(type, message, context) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('notification:display', {
+      type,
+      message,
+      context
+    });
+  }
+}
+
 // =====================================================
 // ЛОГИКА ОБНОВЛЕНИЯ ТОКЕНА (REFRESH)
 // =====================================================
@@ -107,11 +118,16 @@ async function refreshTwitchToken() {
           store.delete('twitch.refreshToken');
         }
         const errText = await res.text().catch(() => '');
-        throw new Error(`Ошибка сервера Dimandus: ${res.status} ${errText}`);
+        const errorMsg = `Ошибка сервера Dimandus: ${res.status} ${errText}`;
+        sendNotification('error', 'Не удалось обновить токен. Перезайдите в аккаунт', 'RefreshToken');
+        throw new Error(errorMsg);
       }
 
       const json = await res.json();
-      if (!json.access_token) throw new Error('Сервер вернул пустой токен');
+      if (!json.access_token) {
+        sendNotification('error', 'Сервер вернул пустой токен', 'RefreshToken');
+        throw new Error('Сервер вернул пустой токен');
+      }
 
       store.set('twitch.accessToken', json.access_token);
       if (json.refresh_token) store.set('twitch.refreshToken', json.refresh_token);
@@ -152,6 +168,7 @@ async function refreshTwitchToken() {
         if (res.status === 400 || res.status === 401) {
           store.delete('twitch.accessToken');
         }
+        sendNotification('error', 'Не удалось обновить токен. Перезайдите в аккаунт', 'RefreshToken');
         throw new Error(json.message || 'Не удалось обновить токен');
       }
 
@@ -193,6 +210,7 @@ async function helixFetch(url, options = {}, _isRetry = false) {
 
       store.delete('twitch.accessToken');
       store.delete('twitch.refreshToken');
+      sendNotification('critical', 'Недостаточно прав доступа. Выйдите и войдите заново', 'Helix');
       throw new Error(
         'Недостаточно прав доступа (Scopes). Пожалуйста, выйдите и войдите в аккаунт заново.'
       );
@@ -224,6 +242,7 @@ async function helixFetch(url, options = {}, _isRetry = false) {
     } catch (refreshErr) {
       log.error('[Helix] Не удалось восстановить сессию:', refreshErr.message);
       store.delete('twitch.accessToken');
+      sendNotification('error', 'Сессия Twitch истекла. Перезайдите в приложение', 'Helix');
       throw new Error('Сессия Twitch истекла. Перезайдите в приложение.');
     }
   }
@@ -291,12 +310,18 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// ----------------- IPC: ping / config -----------------
+// ----------------- IPC: ping / config / notifications -----------------
 
 ipcMain.handle('ping', () => 'pong from main');
 ipcMain.handle('config:get', (event, key) => store.get(key));
 ipcMain.handle('config:set', (event, key, value) => store.set(key, value));
 ipcMain.handle('config:delete', (event, key) => store.delete(key));
+
+ipcMain.on('notification:show', (event, data) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('notification:display', data);
+  }
+});
 
 // ----------------- Twitch OAuth Scopes -----------------
 
@@ -526,23 +551,39 @@ const KNOWN_BOTS = new Set([
 
 async function getBroadcasterIdByLogin(channelLogin) {
   const login = (channelLogin || '').toLowerCase().replace('#', '').trim();
-  if (!login) throw new Error('Empty login');
+  if (!login) {
+    const error = new Error('Empty login');
+    sendNotification('error', 'Не указан логин канала', 'getBroadcasterIdByLogin');
+    throw error;
+  }
   const res = await helixFetch(
     `https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`
   );
   const json = await res.json();
-  if (!res.ok || !json.data || !json.data[0]) throw new Error('Channel not found');
+  if (!res.ok || !json.data || !json.data[0]) {
+    const error = new Error('Channel not found');
+    sendNotification('error', `Канал "${login}" не найден`, 'getBroadcasterIdByLogin');
+    throw error;
+  }
   return json.data[0].id;
 }
 
 async function getUserIdByLogin(userLogin) {
   const login = (userLogin || '').toLowerCase().trim();
-  if (!login) throw new Error('Empty login');
+  if (!login) {
+    const error = new Error('Empty login');
+    sendNotification('error', 'Не указан логин пользователя', 'getUserIdByLogin');
+    throw error;
+  }
   const res = await helixFetch(
     `https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`
   );
   const json = await res.json();
-  if (!res.ok || !json.data || !json.data[0]) throw new Error('User not found');
+  if (!res.ok || !json.data || !json.data[0]) {
+    const error = new Error('User not found');
+    sendNotification('error', `Пользователь "${login}" не найден`, 'getUserIdByLogin');
+    throw error;
+  }
   return json.data[0].id;
 }
 
@@ -753,21 +794,30 @@ async function getUserDetailsHelix(userLogin) {
 
 // Moderation Actions
 async function banUserHelix(channel, user, duration, reason) {
-  const bid = await getBroadcasterIdByLogin(channel);
-  const mid = store.get('twitch.userId');
-  const uid = await getUserIdByLogin(user);
-  const body = { data: { user_id: uid, reason: reason || '' } };
-  if (duration) body.data.duration = duration;
+  try {
+    const bid = await getBroadcasterIdByLogin(channel);
+    const mid = store.get('twitch.userId');
+    const uid = await getUserIdByLogin(user);
+    const body = { data: { user_id: uid, reason: reason || '' } };
+    if (duration) body.data.duration = duration;
 
-  const res = await helixFetch(
-    `https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${bid}&moderator_id=${mid}`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body)
+    const res = await helixFetch(
+      `https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${bid}&moderator_id=${mid}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body)
+      }
+    );
+    if (!res.ok) {
+      const json = await res.json();
+      sendNotification('error', `Не удалось ${duration ? 'выдать таймаут' : 'забанить'} пользователя ${user}`, 'Moderation');
+      throw new Error(json.message);
     }
-  );
-  if (!res.ok) throw new Error((await res.json()).message);
-  return { success: true };
+    return { success: true };
+  } catch (err) {
+    log.error('[BanUser] ошибка:', err.message);
+    throw err;
+  }
 }
 
 async function unbanUserHelix(channel, user) {
@@ -785,16 +835,24 @@ async function unbanUserHelix(channel, user) {
 }
 
 async function deleteMessageHelix(channel, msgId) {
-  const bid = await getBroadcasterIdByLogin(channel);
-  const mid = store.get('twitch.userId');
-  const res = await helixFetch(
-    `https://api.twitch.tv/helix/moderation/chat?broadcaster_id=${bid}&moderator_id=${mid}&message_id=${msgId}`,
-    {
-      method: 'DELETE'
+  try {
+    const bid = await getBroadcasterIdByLogin(channel);
+    const mid = store.get('twitch.userId');
+    const res = await helixFetch(
+      `https://api.twitch.tv/helix/moderation/chat?broadcaster_id=${bid}&moderator_id=${mid}&message_id=${msgId}`,
+      {
+        method: 'DELETE'
+      }
+    );
+    if (!res.ok) {
+      sendNotification('error', 'Не удалось удалить сообщение', 'Moderation');
+      throw new Error('Failed to delete');
     }
-  );
-  if (!res.ok) throw new Error('Failed to delete');
-  return { success: true };
+    return { success: true };
+  } catch (err) {
+    log.error('[DeleteMessage] ошибка:', err.message);
+    throw err;
+  }
 }
 
 async function clearChatHelix(channel) {
@@ -856,47 +914,62 @@ async function updateShieldModeHelix(channel, isActive) {
 }
 
 async function sendAnnouncementHelix(channel, message, color) {
-  const bid = await getBroadcasterIdByLogin(channel);
-  const mid = store.get('twitch.userId');
-  const res = await helixFetch(
-    `https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${bid}&moderator_id=${mid}`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ message, color })
+  try {
+    const bid = await getBroadcasterIdByLogin(channel);
+    const mid = store.get('twitch.userId');
+    const res = await helixFetch(
+      `https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${bid}&moderator_id=${mid}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ message, color })
+      }
+    );
+    if (!res.ok) {
+      sendNotification('error', 'Не удалось отправить объявление', 'Announcement');
+      throw new Error('Announcement failed');
     }
-  );
-  if (!res.ok) throw new Error('Announcement failed');
-  return { success: true };
+    return { success: true };
+  } catch (err) {
+    log.error('[Announcement] ошибка:', err.message);
+    throw err;
+  }
 }
 
 // Отправка обычного чата через Helix (chat/messages)
 async function sendChatMessageHelix(channel, message) {
-  const bid = await getBroadcasterIdByLogin(channel);   // broadcaster_id
-  const senderId = store.get('twitch.userId');          // sender_id (наш userId)
+  try {
+    const bid = await getBroadcasterIdByLogin(channel);
+    const senderId = store.get('twitch.userId');
 
-  if (!senderId) {
-    throw new Error('Нет twitch.userId в конфиге, пользователь не авторизован');
+    if (!senderId) {
+      sendNotification('error', 'Пользователь не авторизован', 'SendMessage');
+      throw new Error('Нет twitch.userId в конфиге, пользователь не авторизован');
+    }
+
+    const body = {
+      broadcaster_id: bid,
+      sender_id: senderId,
+      message
+    };
+
+    const res = await helixFetch('https://api.twitch.tv/helix/chat/messages', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      sendNotification('error', 'Не удалось отправить сообщение', 'SendMessage');
+      throw new Error(json?.message || 'Не удалось отправить сообщение через Helix');
+    }
+
+    const data = json.data && json.data[0];
+    return { messageId: data?.message_id };
+  } catch (err) {
+    log.error('[SendMessage] ошибка:', err.message);
+    throw err;
   }
-
-  const body = {
-    broadcaster_id: bid,
-    sender_id: senderId,
-    message
-  };
-
-  const res = await helixFetch('https://api.twitch.tv/helix/chat/messages', {
-    method: 'POST',
-    body: JSON.stringify(body)
-  });
-
-  const json = await res.json();
-
-  if (!res.ok) {
-    throw new Error(json?.message || 'Не удалось отправить сообщение через Helix');
-  }
-
-  const data = json.data && json.data[0];
-  return { messageId: data?.message_id };
 }
 
 async function fetchGlobalChatBadgesHelix() {

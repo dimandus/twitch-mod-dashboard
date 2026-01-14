@@ -7,11 +7,13 @@ import UserMessageLog, {
 } from './components/UserMessageLog';
 import UserProfileModal from './components/UserProfileModal';
 import AutoModQueue from './components/AutoModQueue';
+import NotificationContainer from './components/NotificationContainer';
 import { twitchChatClient } from './chat/TwitchChatClient';
 import type { ChatPane, ChatMessage } from './views/ChatArea';
 import { handleModCommand } from './commands/ModCommands';
 import { createSystemMessage } from './utils/chatSystemMessages';
 import { logger } from './utils/logger';
+import { handleError, ErrorCodes } from './utils/errorHandler';
 
 type Tab = 'dashboard' | 'settings';
 
@@ -293,7 +295,8 @@ const App: React.FC = () => {
           await window.electronAPI.twitch.timeoutUser(
             channel,
             userLogOpen.login,
-            duration || 600
+            duration || 600,
+            ''
           );
           markUserMessagesAsDeleted(channel, userLogOpen.login);
           break;
@@ -314,7 +317,7 @@ const App: React.FC = () => {
           break;
       }
     } catch (err) {
-      console.error('[UserLog Moderation] ошибка', err);
+      handleError(err, 'UserModeration');
     }
   };
 
@@ -333,7 +336,7 @@ const App: React.FC = () => {
       await window.electronAPI.twitch.deleteMessage(channel, msgId);
       markMessageAsDeleted(channel, msgId);
     } catch (err) {
-      console.error('[DeleteMessage] ошибка', err);
+      handleError(err, 'DeleteMessage');
     }
   };
 
@@ -480,7 +483,7 @@ const App: React.FC = () => {
         if (cancelled || !infos) return;
 
         const infoMap = new Map(
-          infos.map((i: any) => [i.login.toLowerCase(), i])
+          infos.map((i) => [i.login.toLowerCase(), i])
         );
 
         // 1) обновляем globalUsers
@@ -531,7 +534,7 @@ const App: React.FC = () => {
           return updated;
         });
       } catch (err) {
-        console.warn('[App] getUsersInfo для globalUsers не удался', err);
+        handleError(err, 'FetchUsersInfo');
       }
     };
 
@@ -1089,7 +1092,7 @@ setActiveChatters((prev) => {
 
         setChatReady(true);
       } catch (err) {
-        logger.error('[App] ошибка инициализации чат-клиента', err);
+        handleError(err, 'ChatInit');
       }
     };
 
@@ -1171,7 +1174,7 @@ setActiveChatters((prev) => {
           }
         }
       } catch (err) {
-        console.error('[App] Ошибка проверки логина:', err);
+        handleError(err, 'LoginCheck');
         isInitializing = false;
       }
     };
@@ -1208,7 +1211,7 @@ setActiveChatters((prev) => {
           await twitchChatClient.joinChannel(ch);
           joined.add(ch);
         } catch (err) {
-          console.error('[App] не удалось join', ch, err);
+          handleError(err, `JoinChannel:${ch}`);
         }
       }
 
@@ -1283,11 +1286,7 @@ setActiveChatters((prev) => {
             };
           });
         } catch (err) {
-          console.warn(
-            '[RefreshSettings] ошибка для',
-            chanLower,
-            err
-          );
+          handleError(err, `RefreshSettings:${chanLower}`);
         }
       }
     };
@@ -1307,6 +1306,7 @@ setActiveChatters((prev) => {
 
   return (
     <div style={appContainerStyle}>
+      <NotificationContainer />
       <header style={headerStyle}>
         <h1 style={titleStyle}>Twitch Mod Dashboard</h1>
         <TabButton

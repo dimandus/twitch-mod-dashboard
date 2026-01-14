@@ -3,6 +3,13 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   ping: () => ipcRenderer.invoke('ping'),
 
+  showNotification: (data) => ipcRenderer.send('notification:show', data),
+  onNotification: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('notification:display', listener);
+    return () => ipcRenderer.removeListener('notification:display', listener);
+  },
+
   config: {
     get: (key) => ipcRenderer.invoke('config:get', key),
     set: (key, value) => ipcRenderer.invoke('config:set', key, value),
