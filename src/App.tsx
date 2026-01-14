@@ -1457,6 +1457,9 @@ function buildChatMessage(
 
   // Проверяем, является ли пользователь участником рейда
   const isRaider = !!(tags['msg-param-viewerCount'] || tags['msg-param-viewer-count']);
+  
+  // Проверяем, первое ли это сообщение пользователя
+  const isFirstMessage = tags['first-msg'] === true || tags['first-msg'] === '1';
 
   return {
     id: localId,
@@ -1476,7 +1479,8 @@ function buildChatMessage(
     emotes: tags.emotes,
     deleted: false,
     mentionedSelf: mentionedSelf ?? false,
-    isRaider
+    isRaider,
+    isFirstMessage
   };
 }
 

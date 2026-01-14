@@ -24,6 +24,7 @@ export interface ChatMessage {
   canDelete?: boolean;
   cleared?: boolean;
   isRaider?: boolean;
+  isFirstMessage?: boolean;
 }
 
 export interface ChatPane {
@@ -1228,6 +1229,7 @@ const applyCommandSuggestion = (paneId: string) => {
                       const isCleared = !!m.cleared && !isDeleted;
                       const isMentionedSelf = !!m.mentionedSelf;
                       const isRaider = !!m.isRaider;
+                      const isFirstMessage = !!m.isFirstMessage;
 
                       return (
                         <div
@@ -1245,7 +1247,8 @@ const applyCommandSuggestion = (paneId: string) => {
                             isCleared,
                             isMentionedSelf,
                             textScale,
-                            isRaider
+                            isRaider,
+                            isFirstMessage
                           )}
                         >
                           <div
@@ -1795,7 +1798,8 @@ const messageStyle = (
   isCleared: boolean = false,
   isMentionedSelf: boolean = false,
   fontScale: number = 1,
-  isRaider: boolean = false
+  isRaider: boolean = false,
+  isFirstMessage: boolean = false
 ): React.CSSProperties => ({
   fontSize: 12 * fontScale,
   background: isDeleted
@@ -1813,7 +1817,8 @@ const messageStyle = (
   opacity: isDeleted ? 0.7 : isCleared ? 0.6 : 1,
   cursor: 'context-menu',
   borderLeft: isDeleted ? '3px solid #ef4444' : isRaider ? '3px solid #3b82f6' : '3px solid transparent',
-  textDecoration: 'none'
+  textDecoration: 'none',
+  outline: isFirstMessage ? '1px solid #eab308' : 'none'
 });
 
 const usernameStyle = (
