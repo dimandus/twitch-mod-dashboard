@@ -1685,10 +1685,11 @@ const modesBarStyle: React.CSSProperties = {
 
 const messagesContainerStyle: React.CSSProperties = {
   flex: 1,
-  padding: 8,
+  padding: '8px 18px 8px 8px',
   display: 'flex',
   flexDirection: 'column',
   overflowY: 'auto',
+  overflowX: 'hidden',
   gap: 4
 };
 
@@ -1866,7 +1867,10 @@ const messageStyle = (
   cursor: 'context-menu',
   borderLeft: isDeleted ? '3px solid #ef4444' : isRaider ? '3px solid #3b82f6' : '3px solid transparent',
   textDecoration: 'none',
-  outline: isFirstMessage ? '1px solid #eab308' : 'none'
+  outline: isFirstMessage ? '1px solid #eab308' : 'none',
+  flexWrap: 'wrap',
+  wordBreak: 'break-word',
+  overflowWrap: 'break-word'
 });
 
 const usernameStyle = (
@@ -1895,7 +1899,10 @@ const messageTextStyle = (
   fontSize: 12 * fontScale,
   color: isDeleted ? '#9ca3af' : isCleared ? '#6b7280' : '#e5e7eb',
   textDecoration: isDeleted ? 'line-through' : 'none',
-  wordBreak: 'break-word'
+  wordBreak: 'break-word',
+  overflowWrap: 'break-word',
+  flex: 1,
+  minWidth: 0
 });
 
 const deletedLabelStyle: React.CSSProperties = {
