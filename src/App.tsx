@@ -1460,6 +1460,9 @@ function buildChatMessage(
   
   // Проверяем, первое ли это сообщение пользователя
   const isFirstMessage = tags['first-msg'] === true || tags['first-msg'] === '1';
+  
+  // Проверяем, из какого канала пришло сообщение (для shared chat)
+  const sourceRoomId = tags['source-room-id'] || tags['room-id'];
 
   return {
     id: localId,
@@ -1480,7 +1483,8 @@ function buildChatMessage(
     deleted: false,
     mentionedSelf: mentionedSelf ?? false,
     isRaider,
-    isFirstMessage
+    isFirstMessage,
+    sourceRoomId
   };
 }
 

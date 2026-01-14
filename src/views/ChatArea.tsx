@@ -25,6 +25,7 @@ export interface ChatMessage {
   cleared?: boolean;
   isRaider?: boolean;
   isFirstMessage?: boolean;
+  sourceRoomId?: string;
 }
 
 export interface ChatPane {
@@ -1230,6 +1231,7 @@ const applyCommandSuggestion = (paneId: string) => {
                       const isMentionedSelf = !!m.mentionedSelf;
                       const isRaider = !!m.isRaider;
                       const isFirstMessage = !!m.isFirstMessage;
+                      const isSharedChat = m.sourceRoomId && m.sourceRoomId !== pane.channel;
 
                       return (
                         <div
@@ -1275,6 +1277,22 @@ const applyCommandSuggestion = (paneId: string) => {
                           >
                             {m.displayName || m.userLogin}:
                           </span>
+                          {isSharedChat && (
+                            <span
+                              style={{
+                                fontSize: 9 * textScale,
+                                color: '#a78bfa',
+                                backgroundColor: '#2e1065',
+                                padding: '1px 4px',
+                                borderRadius: 3,
+                                fontWeight: 600,
+                                marginRight: 4
+                              }}
+                              title={`Сообщение из другого канала (room-id: ${m.sourceRoomId})`}
+                            >
+                              🔗
+                            </span>
+                          )}
                           <span
                             style={messageTextStyle(
                               isDeleted,
