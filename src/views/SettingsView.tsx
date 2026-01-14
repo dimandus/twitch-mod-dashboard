@@ -9,8 +9,16 @@ const REQUIRED_SCOPES = [
   'moderator:manage:chat_messages',
   'moderator:manage:chat_settings',
   'moderator:manage:announcements',
+  'moderator:manage:shield_mode',
+  'moderator:read:shield_mode',
   'moderator:read:chatters',
-  'user:read:moderated_channels'
+  'user:read:moderated_channels',
+  'user:read:follows',
+  'user:write:chat',
+  'user:read:emotes',
+  'moderator:manage:automod',
+  'moderator:read:automod_settings',
+  'moderator:manage:automod_settings'
 ];
 
 type SettingsTab = 'auth' | 'params' | 'design';
