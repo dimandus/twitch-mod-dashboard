@@ -6,6 +6,7 @@ import UserMessageLog, {
   UserLogMessage
 } from './components/UserMessageLog';
 import UserProfileModal from './components/UserProfileModal';
+import AutoModQueue from './components/AutoModQueue';
 import { twitchChatClient } from './chat/TwitchChatClient';
 import type { ChatPane, ChatMessage } from './views/ChatArea';
 import { handleModCommand } from './commands/ModCommands';
@@ -98,6 +99,7 @@ const App: React.FC = () => {
 
   const [userLogOpen, setUserLogOpen] = useState<UserLogData | null>(null);
   const [userProfileLogin, setUserProfileLogin] = useState<string | null>(null);
+  const [autoModQueueOpen, setAutoModQueueOpen] = useState(false);
 
   // Дедупликация системных сообщений
   const recentSystemMessages = useRef<Set<string>>(new Set());
@@ -236,6 +238,29 @@ const App: React.FC = () => {
   };
 
   const closeUserProfile = () => setUserProfileLogin(null);
+
+  // =====================================================
+  // AutoMod подключение
+  // =====================================================
+
+  useEffect(() => {
+    if (!chatReady || chatPanes.length === 0) return;
+
+    const channelLogins = chatPanes.map((p) => p.channel.toLowerCase());
+    
+    window.electronAPI.automod
+      .connect(channelLogins)
+      .then(() => {
+        console.log('[App] AutoMod подключен для каналов:', channelLogins);
+      })
+      .catch((err) => {
+        console.warn('[App] Не удалось подключить AutoMod:', err);
+      });
+
+    return () => {
+      window.electronAPI.automod.disconnect();
+    };
+  }, [chatReady, chatPanes]);
 
   // Обновляем данные в открытом логе при изменении globalUsers
   useEffect(() => {
@@ -1296,6 +1321,13 @@ setActiveChatters((prev) => {
         >
           Настройки
         </TabButton>
+        <button
+          onClick={() => setAutoModQueueOpen(true)}
+          style={automodButtonStyle}
+          title="AutoMod Очередь"
+        >
+          🛡️ AutoMod
+        </button>
       </header>
 
       <main style={mainStyle}>
@@ -1349,6 +1381,10 @@ setActiveChatters((prev) => {
           onClose={closeUserProfile}
         />
       )}
+
+      {autoModQueueOpen && (
+        <AutoModQueue onClose={() => setAutoModQueueOpen(false)} />
+      )}
     </div>
   );
 };
@@ -1382,6 +1418,18 @@ const titleStyle: React.CSSProperties = {
 const mainStyle: React.CSSProperties = {
   flex: 1,
   overflow: 'hidden'
+};
+
+const automodButtonStyle: React.CSSProperties = {
+  marginLeft: 'auto',
+  padding: '6px 12px',
+  background: '#9147ff',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 4,
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 'bold'
 };
 
 // =====================================================
@@ -1462,7 +1510,9 @@ function buildChatMessage(
   const isFirstMessage = tags['first-msg'] === true || tags['first-msg'] === '1';
   
   // Проверяем, из какого канала пришло сообщение (для shared chat)
-  const sourceRoomId = tags['source-room-id'] || tags['room-id'];
+  // source-room-id есть только если сообщение из другого канала в коллаборации
+  const sourceRoomId = tags['source-room-id'];
+  const sourceChannelName = tags['source-channel-name'];
 
   return {
     id: localId,
@@ -1484,7 +1534,8 @@ function buildChatMessage(
     mentionedSelf: mentionedSelf ?? false,
     isRaider,
     isFirstMessage,
-    sourceRoomId
+    sourceRoomId,
+    sourceChannelName
   };
 }
 

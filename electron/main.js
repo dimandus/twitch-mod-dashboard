@@ -6,6 +6,7 @@ const http = require('http');
 const https = require('https');
 const nodeFetch = require('node-fetch');
 const store = require('./store');
+const { TwitchPubSub } = require('./modules/TwitchPubSub');
 
 const isDev = !app.isPackaged;
 
@@ -251,6 +252,7 @@ async function ensureAccessTokenHelix() {
 // =====================================================
 
 let mainWindow;
+let pubsubClient = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -312,7 +314,10 @@ const TWITCH_SCOPES = [
   'user:read:moderated_channels',
   'user:read:follows',
   'user:write:chat',
-  'user:read:emotes'           // НОВОЕ
+  'user:read:emotes',
+  'moderator:manage:automod',
+  'moderator:read:automod_settings',
+  'moderator:manage:automod_settings'
 ];
 
 // ----------------- Twitch OAuth (прямой) -----------------
@@ -1097,3 +1102,111 @@ ipcMain.handle('twitch:getUserEmotes', () =>
 ipcMain.handle('twitch:getChannelEmotes', (e, channelLogin) =>
   fetchChannelEmotesHelix(channelLogin)
 );
+
+// =====================================================
+// AUTOMOD PUBSUB
+// =====================================================
+
+ipcMain.handle('automod:connect', async (e, channelLogins) => {
+  try {
+    const accessToken = store.get('twitch.accessToken');
+    const userId = store.get('twitch.userId');
+    
+    if (!accessToken || !userId) {
+      throw new Error('Нет токена или userId');
+    }
+
+    // Получаем broadcaster IDs для каналов
+    const channelIds = [];
+    for (const login of channelLogins) {
+      try {
+        const id = await getBroadcasterIdByLogin(login);
+        channelIds.push(id);
+      } catch (err) {
+        console.warn('[AutoMod] Не удалось получить ID для', login);
+      }
+    }
+
+    if (channelIds.length === 0) {
+      console.warn('[AutoMod] Нет валидных каналов для подключения');
+      return;
+    }
+
+    // Отключаем старое подключение
+    if (pubsubClient) {
+      pubsubClient.disconnect();
+    }
+
+    // Создаём новое
+    pubsubClient = new TwitchPubSub();
+    
+    // Подписываемся на события
+    pubsubClient.onMessage((data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('automod:message', data);
+      }
+    });
+
+    pubsubClient.connect(accessToken, userId, channelIds);
+    
+    return { success: true };
+  } catch (err) {
+    console.error('[AutoMod] Ошибка подключения:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle('automod:disconnect', () => {
+  if (pubsubClient) {
+    pubsubClient.disconnect();
+    pubsubClient = null;
+  }
+});
+
+ipcMain.handle('automod:approve', async (e, msgId) => {
+  try {
+    const userId = store.get('twitch.userId');
+    const res = await helixFetch('https://api.twitch.tv/helix/moderation/automod/message', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        msg_id: msgId,
+        action: 'ALLOW'
+      })
+    });
+    
+    if (!res.ok) {
+      const json = await res.json();
+      throw new Error(json.message || 'Не удалось одобрить');
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error('[AutoMod] Ошибка approve:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle('automod:deny', async (e, msgId) => {
+  try {
+    const userId = store.get('twitch.userId');
+    const res = await helixFetch('https://api.twitch.tv/helix/moderation/automod/message', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        msg_id: msgId,
+        action: 'DENY'
+      })
+    });
+    
+    if (!res.ok) {
+      const json = await res.json();
+      throw new Error(json.message || 'Не удалось отклонить');
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error('[AutoMod] Ошибка deny:', err);
+    throw err;
+  }
+});

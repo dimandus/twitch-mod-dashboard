@@ -220,10 +220,19 @@ interface TwitchAPI {
   ) => Promise<ModerationResult>;
 }
 
+interface AutoModAPI {
+  connect: (channelLogins: string[]) => Promise<{ success: boolean }>;
+  disconnect: () => Promise<void>;
+  approve: (msgId: string) => Promise<{ success: boolean }>;
+  deny: (msgId: string) => Promise<{ success: boolean }>;
+  onMessage: (callback: (data: any) => void) => () => void;
+}
+
 interface ElectronAPI {
   ping?: () => Promise<string>;
   config: ConfigAPI;
   twitch: TwitchAPI;
+  automod: AutoModAPI;
 }
 
 // =====================================================

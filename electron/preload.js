@@ -9,6 +9,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (key) => ipcRenderer.invoke('config:delete', key)
   },
 
+  automod: {
+    connect: (channelLogins) => ipcRenderer.invoke('automod:connect', channelLogins),
+    disconnect: () => ipcRenderer.invoke('automod:disconnect'),
+    approve: (msgId) => ipcRenderer.invoke('automod:approve', msgId),
+    deny: (msgId) => ipcRenderer.invoke('automod:deny', msgId),
+    onMessage: (callback) => {
+      const listener = (event, data) => callback(data);
+      ipcRenderer.on('automod:message', listener);
+      return () => ipcRenderer.removeListener('automod:message', listener);
+    }
+  },
+
   twitch: {
     // Авторизация
     login: () => ipcRenderer.invoke('twitch:login'),

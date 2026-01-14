@@ -26,6 +26,7 @@ export interface ChatMessage {
   isRaider?: boolean;
   isFirstMessage?: boolean;
   sourceRoomId?: string;
+  sourceChannelName?: string;
 }
 
 export interface ChatPane {
@@ -1272,7 +1273,8 @@ const applyCommandSuggestion = (paneId: string) => {
                       const isMentionedSelf = !!m.mentionedSelf;
                       const isRaider = !!m.isRaider;
                       const isFirstMessage = !!m.isFirstMessage;
-                      const isSharedChat = m.sourceRoomId && m.sourceRoomId !== pane.channel;
+                      // Сообщение из shared chat только если есть source-room-id (значит из другого канала)
+                      const isSharedChat = !!m.sourceRoomId;
 
                       return (
                         <div
@@ -1329,9 +1331,9 @@ const applyCommandSuggestion = (paneId: string) => {
                                 fontWeight: 600,
                                 marginRight: 4
                               }}
-                              title={`Сообщение из другого канала (room-id: ${m.sourceRoomId})`}
+                              title={`Сообщение из другого канала коллаборации${m.sourceChannelName ? `: ${m.sourceChannelName}` : ''}`}
                             >
-                              🔗
+                              🔗{m.sourceChannelName || ''}
                             </span>
                           )}
                           <span
