@@ -14,6 +14,29 @@
 
 ## ✅ Выполнено
 
+### ~~2.2 State Manager (Zustand)~~ ✅
+**Статус:** Выполнено (100%)
+
+**Что сделано:**
+- ✅ Установлен Zustand
+- ✅ Создан `src/stores/chatStore.ts` — чаты и сообщения
+- ✅ Создан `src/stores/userStore.ts` — пользователи
+- ✅ Создан `src/stores/moderationStore.ts` — модальные окна
+- ✅ Обновлены все хуки для работы с Zustand
+- ✅ App.tsx переписан без Context API
+- ✅ Удалены старые контексты
+
+**Результат:**
+- Нет prop drilling — компоненты получают данные напрямую
+- Селективные подписки — меньше ре-рендеров
+- Простой и понятный API
+- Код стал ещё чище
+- Готово к добавлению DevTools и persist middleware
+
+**Время затрачено:** 1.5 часа
+
+---
+
 ### ~~2.1 Рефакторинг App.tsx~~ ✅
 **Статус:** Выполнено (100%)
 
@@ -109,52 +132,8 @@ const dimandusAgent = new https.Agent({
 ### ~~2.1 Рефакторинг App.tsx~~ ✅
 **Перенесено в раздел "Выполнено"**
 
----
-
-### 2.2 State Manager (Zustand)
-**Проблема:**
-- Prop drilling
-- Сложная синхронизация состояния
-- Дублирование данных (globalUsers vs activeChatters)
-
-**Решение:**
-- [ ] Установить Zustand: `npm install zustand`
-- [ ] Создать stores:
-  - `chatStore.ts` — чаты и сообщения
-  - `userStore.ts` — пользователи
-  - `settingsStore.ts` — настройки
-
-**Пример:**
-```typescript
-// src/stores/chatStore.ts
-import { create } from 'zustand';
-
-interface ChatStore {
-  panes: ChatPane[];
-  addPane: (channel: string) => void;
-  removePane: (channel: string) => void;
-  addMessage: (channel: string, message: ChatMessage) => void;
-}
-
-export const useChatStore = create<ChatStore>((set) => ({
-  panes: [],
-  addPane: (channel) => set((state) => ({
-    panes: [...state.panes, { channel, messages: [] }]
-  })),
-  removePane: (channel) => set((state) => ({
-    panes: state.panes.filter(p => p.channel !== channel)
-  })),
-  addMessage: (channel, message) => set((state) => ({
-    panes: state.panes.map(p => 
-      p.channel === channel 
-        ? { ...p, messages: [...p.messages, message] }
-        : p
-    )
-  }))
-}));
-```
-
-**Время:** 4-6 часов
+### ~~2.2 State Manager (Zustand)~~ ✅
+**Перенесено в раздел "Выполнено"**
 
 ---
 

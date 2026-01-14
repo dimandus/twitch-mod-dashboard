@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { twitchChatClient } from '../chat/TwitchChatClient';
-import { useChatContext } from '../contexts/ChatContext';
-import { useUserContext } from '../contexts/UserContext';
+import { useChatStore, modeChangeTimestamps } from '../stores/chatStore';
+import { useUserStore } from '../stores/userStore';
 import type { ChatMessage } from '../views/ChatArea';
 import type { UserLogMessage } from '../components/UserMessageLog';
 import { logger } from '../utils/logger';
@@ -14,19 +14,18 @@ interface PendingSelfMessage {
 }
 
 export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string) => void) => {
-  const {
-    setChatPanes,
-    setChatReady,
-    setCurrentUserLogin,
-    currentUserLoginRef,
-    addSystemMessage,
-    modeChangeTimestamps,
-    initializedChannels,
-    setRoomModes
-  } = useChatContext();
-
-  const { setGlobalUsers, globalUsersRef, setActiveChatters } = useUserContext();
-
+  const setPanes = useChatStore(state => state.setPanes);
+  const setChatReady = useChatStore(state => state.setChatReady);
+  const setCurrentUserLogin = useChatStore(state => state.setCurrentUserLogin);
+  const addSystemMessage = useChatStore(state => state.addSystemMessage);
+  const setRoomModes = useChatStore(state => state.setRoomModes);
+  
+  const setGlobalUsers = useUserStore(state => state.setGlobalUsers);
+  const setActiveChatters = useUserStore(state => state.setActiveChatters);
+  const globalUsers = useUserStore(state => state.globalUsers);
+  
+  const currentUserLoginRef = useRef<string | null>(null);
+  const initializedChannels = useRef<Set<string>>(new Set());
   const pendingSelfMessagesRef = useRef<Record<string, PendingSelfMessage[]>>({});
 
   useEffect(() => {
@@ -109,7 +108,7 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
         const badgeInfo: Record<string, string> = tags['badge-info'] || {};
         const badgesArray = Object.keys(badgeVersions);
 
-        setChatPanes((prev) =>
+        setPanes((prev) =>
           prev.map((p) => {
             if (p.channel.toLowerCase() !== chanLower) return p;
 
@@ -167,7 +166,7 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
 
         setActiveChatters((prev) => {
           const channelChatters = new Map(prev[chanLower] || []);
-          const userData = globalUsersRef.current[loginLower];
+          const userData = globalUsers[loginLower];
 
           channelChatters.set(odaterId, {
             odaterId,
@@ -210,7 +209,7 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
       twitchChatClient.onUserClearchat(({ channel, targetUserId, targetLogin }) => {
         const chanLower = channel.toLowerCase();
 
-        setChatPanes((prev) =>
+        setPanes((prev) =>
           prev.map((p) => {
             if (p.channel.toLowerCase() !== chanLower) return p;
 
@@ -334,7 +333,7 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
 
       twitchChatClient.onRoomState(({ channel, state }) => {
         const chanLower = channel.toLowerCase();
-        const lastChange = modeChangeTimestamps.current[chanLower];
+        const lastChange = modeChangeTimestamps[chanLower];
         const now = Date.now();
         const ignoreIRC = lastChange && now - lastChange < 3000;
 
@@ -428,7 +427,7 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
     };
   }, []);
 
-  return { pendingSelfMessagesRef };
+  return { pendingSelfMessagesRef, currentUserLoginRef };
 };
 
 function buildChatMessage(

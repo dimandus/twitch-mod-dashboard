@@ -1,20 +1,21 @@
 import { useEffect } from 'react';
-import { useChatContext } from '../contexts/ChatContext';
-import { defaultModes } from '../contexts/ChatContext';
+import { useChatStore, defaultModes, modeChangeTimestamps } from '../stores/chatStore';
 import { handleError } from '../utils/errorHandler';
 
 export const useRoomModes = () => {
-  const { chatReady, chatPanes, roomModes, setRoomModes, modeChangeTimestamps } = useChatContext();
+  const chatReady = useChatStore(state => state.chatReady);
+  const panes = useChatStore(state => state.panes);
+  const setRoomModes = useChatStore(state => state.setRoomModes);
 
   useEffect(() => {
     if (!chatReady) return;
 
     const refreshChatSettings = async () => {
-      const channels = chatPanes.map((p) => p.channel.toLowerCase());
+      const channels = panes.map((p) => p.channel.toLowerCase());
       if (channels.length === 0) return;
 
       for (const chanLower of channels) {
-        const lastChange = modeChangeTimestamps.current[chanLower];
+        const lastChange = modeChangeTimestamps[chanLower];
         if (lastChange && Date.now() - lastChange < 5000) continue;
 
         try {
@@ -31,7 +32,7 @@ export const useRoomModes = () => {
 
           setRoomModes((prev) => {
             const existing = prev[chanLower] || defaultModes;
-            const lastChangeNow = modeChangeTimestamps.current[chanLower];
+            const lastChangeNow = modeChangeTimestamps[chanLower];
             if (lastChangeNow && Date.now() - lastChangeNow < 5000)
               return prev;
 
@@ -65,7 +66,5 @@ export const useRoomModes = () => {
       clearTimeout(initialTimeout);
       clearInterval(intervalId);
     };
-  }, [chatReady, chatPanes, setRoomModes, modeChangeTimestamps]);
-
-  return { roomModes };
+  }, [chatReady, panes, setRoomModes]);
 };

@@ -174,8 +174,17 @@ twitch-mod-dashboard/
 │   │   ├── AutoModQueue.tsx     # Очередь AutoMod
 │   │   ├── UserMessageLog.tsx   # Лог сообщений пользователя
 │   │   └── UserProfileModal.tsx # Профиль пользователя
+│   ├── hooks/
+│   │   ├── useChatClient.ts     # Инициализация чат-клиента
+│   │   ├── useActiveChatters.ts # Управление активными зрителями
+│   │   └── useRoomModes.ts      # Управление режимами чата
+│   ├── stores/
+│   │   ├── chatStore.ts         # Zustand store для чатов
+│   │   ├── userStore.ts         # Zustand store для пользователей
+│   │   └── moderationStore.ts   # Zustand store для модерации
 │   ├── utils/
 │   │   ├── chatSystemMessages.ts
+│   │   ├── errorHandler.ts
 │   │   └── logger.ts
 │   ├── views/
 │   │   ├── ChatArea.tsx         # Область чатов
@@ -190,6 +199,7 @@ twitch-mod-dashboard/
 ├── tsconfig.json
 ├── vite.config.ts
 ├── README.md
+├── ROADMAP.md                   # План развития
 └── AUTOMOD.md                   # Документация AutoMod
 ```
 
@@ -293,10 +303,37 @@ twitch-mod-dashboard/
 - **React** — UI библиотека
 - **TypeScript** — типизация
 - **Vite** — сборщик
+- **Zustand** — state management (без prop drilling)
 - **tmi.js** — Twitch IRC клиент
 - **Twitch Helix API** — официальный API
 - **Twitch PubSub** — WebSocket для AutoMod
 - **electron-store** — хранилище настроек
+
+---
+
+## 🏗️ Архитектура
+
+### State Management (Zustand)
+
+Приложение использует **Zustand** для управления состоянием:
+
+- **chatStore** — чаты, сообщения, режимы чата
+- **userStore** — пользователи, активные зрители
+- **moderationStore** — модальные окна модерации
+
+**Преимущества:**
+- Нет prop drilling — компоненты получают данные напрямую
+- Селективные подписки — меньше ре-рендеров
+- Простой API — легко читать и поддерживать
+- Готово к DevTools и persist middleware
+
+### Модульная структура
+
+- **hooks/** — переиспользуемые хуки
+- **stores/** — Zustand stores
+- **components/** — UI компоненты
+- **views/** — страницы приложения
+- **utils/** — вспомогательные функции
 
 ---
 

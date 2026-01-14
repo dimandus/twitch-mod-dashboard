@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardView from './views/DashboardView';
 import SettingsView from './views/SettingsView';
 import UserMessageLog from './components/UserMessageLog';
 import UserProfileModal from './components/UserProfileModal';
 import AutoModQueue from './components/AutoModQueue';
 import NotificationContainer from './components/NotificationContainer';
-import { useChatStore } from './stores/chatStore';
-import { useUserStore } from './stores/userStore';
-import { useModerationStore } from './stores/moderationStore';
+import { ChatProvider, useChatContext } from './contexts/ChatContext';
+import { UserProvider, useUserContext } from './contexts/UserContext';
+import { ModerationProvider, useModerationContext } from './contexts/ModerationContext';
 import { useChatClient } from './hooks/useChatClient';
 import { useActiveChatters } from './hooks/useActiveChatters';
 import { useRoomModes } from './hooks/useRoomModes';
@@ -17,41 +17,31 @@ import { handleError } from './utils/errorHandler';
 
 type Tab = 'dashboard' | 'settings';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const panes = useChatStore(state => state.panes);
-  const setPanes = useChatStore(state => state.setPanes);
-  const roomModes = useChatStore(state => state.roomModes);
-  const setRoomModes = useChatStore(state => state.setRoomModes);
-  const selectedChannel = useChatStore(state => state.selectedChannel);
-  const setSelectedChannel = useChatStore(state => state.setSelectedChannel);
-  const chatReady = useChatStore(state => state.chatReady);
-  const setChatReady = useChatStore(state => state.setChatReady);
-  const markModeChanged = useChatStore(state => state.markModeChanged);
+  const {
+    chatPanes,
+    setChatPanes,
+    roomModes,
+    setRoomModes,
+    selectedChannel,
+    setSelectedChannel,
+    chatReady,
+    setChatReady,
+    currentUserLoginRef,
+    joinedRef,
+    markModeChanged
+  } = useChatContext();
 
-  const globalUsers = useUserStore(state => state.globalUsers);
-  const setGlobalUsers = useUserStore(state => state.setGlobalUsers);
-  const activeChatters = useUserStore(state => state.activeChatters);
-
-  const userLogOpen = useModerationStore(state => state.userLogOpen);
-  const setUserLogOpen = useModerationStore(state => state.setUserLogOpen);
-  const userProfileLogin = useModerationStore(state => state.userProfileLogin);
-  const autoModQueueOpen = useModerationStore(state => state.autoModQueueOpen);
-  const setAutoModQueueOpen = useModerationStore(state => state.setAutoModQueueOpen);
-  const openUserProfile = useModerationStore(state => state.openUserProfile);
-  const closeUserProfile = useModerationStore(state => state.closeUserProfile);
-  const closeUserLog = useModerationStore(state => state.closeUserLog);
-
-  const joinedRef = useRef<Set<string>>(new Set());
-
+  // Функции для пометки сообщений (используют оба контекста)
   const markMessageAsDeleted = (channel: string, msgId: string) => {
     if (!msgId || msgId.startsWith('local-')) return;
 
     const chanLower = channel.toLowerCase();
 
-    setPanes((prev) =>
+    setChatPanes((prev) =>
       prev.map((p) => {
         if (p.channel.toLowerCase() !== chanLower) return p;
         return {
@@ -88,7 +78,7 @@ const App: React.FC = () => {
     const chanLower = channel.toLowerCase();
     const loginLower = userLogin.toLowerCase();
 
-    setPanes((prev) =>
+    setChatPanes((prev) =>
       prev.map((p) => {
         if (p.channel.toLowerCase() !== chanLower) return p;
         const mark = (m: any) => {
@@ -121,14 +111,29 @@ const App: React.FC = () => {
     });
   };
 
-  const { pendingSelfMessagesRef, currentUserLoginRef } = useChatClient(markMessageAsDeleted);
+  const { globalUsers, setGlobalUsers, activeChatters } = useUserContext();
+
+  const {
+    userLogOpen,
+    setUserLogOpen,
+    userProfileLogin,
+    autoModQueueOpen,
+    setAutoModQueueOpen,
+    openUserLog,
+    closeUserLog,
+    openUserProfile,
+    closeUserProfile
+  } = useModerationContext();
+
+  const { pendingSelfMessagesRef } = useChatClient(markMessageAsDeleted);
   useActiveChatters();
   useRoomModes();
 
+  // AutoMod подключение
   useEffect(() => {
-    if (!chatReady || panes.length === 0) return;
+    if (!chatReady || chatPanes.length === 0) return;
 
-    const channelLogins = panes.map((p) => p.channel.toLowerCase());
+    const channelLogins = chatPanes.map((p) => p.channel.toLowerCase());
     
     window.electronAPI.automod
       .connect(channelLogins)
@@ -142,8 +147,9 @@ const App: React.FC = () => {
     return () => {
       window.electronAPI.automod.disconnect();
     };
-  }, [chatReady, panes]);
+  }, [chatReady, chatPanes]);
 
+  // Обновляем данные в открытом логе
   useEffect(() => {
     if (!userLogOpen) return;
 
@@ -161,6 +167,7 @@ const App: React.FC = () => {
     }
   }, [globalUsers, userLogOpen?.login, setUserLogOpen]);
 
+  // Подтягиваем доп.инфу о пользователях
   useEffect(() => {
     const users = Object.values(globalUsers);
     const toFetch = users.filter((u) => !u.avatarUrl && !u.bannerUrl);
@@ -202,6 +209,7 @@ const App: React.FC = () => {
     };
   }, [globalUsers, setGlobalUsers]);
 
+  // Отслеживание изменений логина
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     let lastCheckedLogin: string | null = null;
@@ -267,13 +275,14 @@ const App: React.FC = () => {
         clearInterval(intervalId);
       }
     };
-  }, [setChatReady, currentUserLoginRef]);
+  }, [setChatReady, currentUserLoginRef, joinedRef]);
 
+  // Sync JOIN/PART
   useEffect(() => {
     if (!chatReady) return;
 
     const syncChannels = async () => {
-      const desired = new Set(panes.map((p) => p.channel.toLowerCase().trim()));
+      const desired = new Set(chatPanes.map((p) => p.channel.toLowerCase().trim()));
       const joined = joinedRef.current;
 
       for (const ch of desired) {
@@ -299,7 +308,7 @@ const App: React.FC = () => {
     };
 
     syncChannels();
-  }, [panes, chatReady]);
+  }, [chatPanes, chatReady, joinedRef]);
 
   const handleSendMessage = async (channel: string, text: string) => {
     const chanLower = channel.toLowerCase().trim();
@@ -329,7 +338,7 @@ const App: React.FC = () => {
             timestamp: Date.now(),
             isSystem: true
           };
-          setPanes((prev) =>
+          setChatPanes((prev) =>
             prev.map((p) => {
               if (p.channel.toLowerCase() !== chanLower) return p;
               return {
@@ -428,13 +437,7 @@ const App: React.FC = () => {
         messages: [...userData.messages]
       });
     } else {
-      setUserLogOpen({
-        login: userLogin,
-        displayName: userLogin,
-        color: undefined,
-        badges: [],
-        messages: []
-      });
+      openUserLog(userLogin);
     }
   };
 
@@ -461,8 +464,8 @@ const App: React.FC = () => {
       <main style={mainStyle}>
         <div style={{ display: tab === 'dashboard' ? 'block' : 'none', height: '100%' }}>
           <DashboardView
-            chatPanes={panes}
-            setChatPanes={setPanes}
+            chatPanes={chatPanes}
+            setChatPanes={setChatPanes}
             roomModes={roomModes}
             setRoomModes={setRoomModes}
             selectedChannel={selectedChannel}
@@ -502,6 +505,19 @@ const App: React.FC = () => {
   );
 };
 
+const App: React.FC = () => {
+  return (
+    <ChatProvider>
+      <UserProvider>
+        <ModerationProvider>
+          <AppContent />
+        </ModerationProvider>
+      </UserProvider>
+    </ChatProvider>
+  );
+};
+
+// Styles
 const appContainerStyle: React.CSSProperties = {
   height: '100vh',
   display: 'flex',

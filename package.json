@@ -34,7 +34,8 @@
     "node-fetch": "^2.7.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "tmi.js": "^1.8.5"
+    "tmi.js": "^1.8.5",
+    "zustand": "^5.0.10"
   },
   "build": {
     "appId": "com.dimandus.twitchmoddashboard",

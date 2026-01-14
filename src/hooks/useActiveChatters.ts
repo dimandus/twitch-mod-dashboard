@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
-import { useUserContext } from '../contexts/UserContext';
-import { handleError } from '../utils/errorHandler';
+import { useUserStore } from '../stores/userStore';
 
 export const useActiveChatters = () => {
-  const { activeChatters, setActiveChatters } = useUserContext();
+  const setActiveChatters = useUserStore(state => state.setActiveChatters);
 
-  // Очистка неактивных чаттеров
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
       const now = Date.now();
@@ -32,6 +30,4 @@ export const useActiveChatters = () => {
 
     return () => clearInterval(cleanupInterval);
   }, [setActiveChatters]);
-
-  return { activeChatters };
 };
