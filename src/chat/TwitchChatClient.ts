@@ -34,6 +34,8 @@ export type NoticeHandler = (params: {
   message: string;
 }) => void;
 
+export type AuthErrorHandler = () => void;
+
 // =====================================================
 // Класс TwitchChatClient
 // =====================================================
@@ -48,6 +50,7 @@ export class TwitchChatClient {
   private clearHandlers = new Set<ChatUserClearHandler>();
   private roomStateHandlers = new Set<RoomStateHandler>();
   private noticeHandlers = new Set<NoticeHandler>();
+  private authErrorHandlers = new Set<AuthErrorHandler>();
 
   private currentUsername: string = '';
 
@@ -91,6 +94,22 @@ export class TwitchChatClient {
 
     client.on('disconnected', (reason) => {
       console.log('[TMI] disconnected:', reason);
+      
+      // Если отключение из-за ошибки аутентификации, нужно обновить токен
+      if (reason && typeof reason === 'string' && 
+          (reason.includes('Login authentication failed') || 
+           reason.includes('authentication') ||
+           reason.includes('Invalid oauth token'))) {
+        console.warn('[TMI] Обнаружена ошибка аутентификации, требуется обновление токена');
+        // Сбрасываем клиент, чтобы можно было переподключиться
+        this.client = null;
+        this.joinedChannels.clear();
+        
+        // Уведомляем обработчики об ошибке аутентификации
+        for (const h of this.authErrorHandlers) {
+          h();
+        }
+      }
     });
 
     client.on('message', (chan, tags, msg, self) => {
@@ -164,6 +183,22 @@ export class TwitchChatClient {
     });
     client.on('error', (err) => {
       console.error('[TMI ERROR]', err);
+      
+      // Обработка ошибок аутентификации
+      const errMsg = err?.message || String(err || '');
+      if (errMsg.includes('Login authentication failed') || 
+          errMsg.includes('authentication') ||
+          errMsg.includes('Invalid oauth token')) {
+        console.warn('[TMI] Ошибка аутентификации токена, требуется обновление');
+        // Сбрасываем клиент для переподключения
+        this.client = null;
+        this.joinedChannels.clear();
+        
+        // Уведомляем обработчики об ошибке аутентификации
+        for (const h of this.authErrorHandlers) {
+          h();
+        }
+      }
     });
     client.on('raw_message', (msgCloned, msg) => {
       console.log('[TMI RAW]', msgCloned);
@@ -259,6 +294,11 @@ export class TwitchChatClient {
     return () => this.noticeHandlers.delete(handler);
   }
 
+  onAuthError(handler: AuthErrorHandler): () => void {
+    this.authErrorHandlers.add(handler);
+    return () => this.authErrorHandlers.delete(handler);
+  }
+
   async disconnect(): Promise<void> {
     if (!this.client) return;
     try {
@@ -273,6 +313,7 @@ export class TwitchChatClient {
     this.clearHandlers.clear();
     this.roomStateHandlers.clear();
     this.noticeHandlers.clear();
+    this.authErrorHandlers.clear();
     console.log('[TwitchChatClient] disconnected');
   }
 

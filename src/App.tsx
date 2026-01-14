@@ -605,7 +605,20 @@ const App: React.FC = () => {
         const user = await window.electronAPI.twitch.getCurrentUser();
         if (!user) {
           console.warn('[App] Нет сохранённого Twitch пользователя');
+          setChatReady(false);
           return;
+        }
+
+        // Если чат уже подключен с этим пользователем, не переподключаем
+        if (twitchChatClient.isConnected() && currentUserLoginRef.current === user.login.toLowerCase()) {
+          console.log('[App] Чат уже подключен для этого пользователя');
+          return;
+        }
+
+        // Если чат подключен, но пользователь другой - отключаемся
+        if (twitchChatClient.isConnected()) {
+          console.log('[App] Отключаемся от предыдущего пользователя');
+          await twitchChatClient.disconnect();
         }
 
         setCurrentUserLogin(user.login.toLowerCase());
@@ -630,6 +643,7 @@ const App: React.FC = () => {
           console.warn(
             '[App] Нет валидного Twitch accessToken. Нужно заново войти в аккаунт.'
           );
+          setChatReady(false);
           return;
         }
 
@@ -860,6 +874,61 @@ setActiveChatters((prev) => {
           }
         );
 
+        // Обработка ошибок аутентификации и переподключение
+        const handleAuthError = async () => {
+          if (cancelled) return;
+          
+          console.log('[App] Обнаружена ошибка аутентификации чата, обновляем токен и переподключаемся...');
+          
+          try {
+            // Обновляем токен
+            let token = await window.electronAPI.config.get('twitch.accessToken');
+            try {
+              const ensured = await window.electronAPI.twitch.ensureAccessToken();
+              if (ensured) token = ensured;
+            } catch (e) {
+              console.warn('[App] Не удалось обновить токен:', e);
+              return;
+            }
+
+            if (!token) {
+              console.warn('[App] Нет токена для переподключения');
+              setChatReady(false);
+              return;
+            }
+
+            // Отключаемся от старого подключения
+            if (twitchChatClient.isConnected()) {
+              await twitchChatClient.disconnect();
+            }
+
+            // Переподключаемся с новым токеном
+            const user = await window.electronAPI.twitch.getCurrentUser();
+            if (user && !cancelled) {
+              await twitchChatClient.connect(user.login, token);
+              
+              // Восстанавливаем подключение к каналам
+              const channelsToRejoin = chatPanes.map(p => p.channel.toLowerCase().trim()).filter(Boolean);
+              for (const ch of channelsToRejoin) {
+                try {
+                  await twitchChatClient.joinChannel(ch);
+                  joinedRef.current.add(ch);
+                } catch (err) {
+                  console.error('[App] Не удалось переподключиться к каналу', ch, err);
+                }
+              }
+              
+              console.log('[App] Чат успешно переподключен после обновления токена');
+            }
+          } catch (err) {
+            console.error('[App] Ошибка переподключения после обновления токена:', err);
+            setChatReady(false);
+          }
+        };
+
+        // Подписываемся на ошибки аутентификации
+        twitchChatClient.onAuthError(handleAuthError);
+
         // Room state
         twitchChatClient.onRoomState(({ channel, state }) => {
           const chanLower = channel.toLowerCase();
@@ -940,6 +1009,94 @@ setActiveChatters((prev) => {
     return () => {
       cancelled = true;
       twitchChatClient.disconnect().catch(() => {});
+    };
+  }, []);
+
+  // =====================================================
+  // Отслеживание изменений логина и переинициализация чата
+  // =====================================================
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    let lastCheckedLogin: string | null = null;
+    let isInitializing = false;
+
+    const checkLoginAndInitChat = async () => {
+      // Предотвращаем параллельные инициализации
+      if (isInitializing) return;
+
+      try {
+        const user = await window.electronAPI.twitch.getCurrentUser();
+        const currentLogin = user?.login?.toLowerCase() || null;
+
+        // Если логин изменился или появился новый логин, переинициализируем чат
+        if (currentLogin !== lastCheckedLogin) {
+          lastCheckedLogin = currentLogin;
+
+          if (currentLogin && currentUserLoginRef.current !== currentLogin) {
+            isInitializing = true;
+            console.log('[App] Обнаружен новый логин, переинициализируем чат...');
+            
+            // Отключаемся от предыдущего подключения, если оно есть
+            if (twitchChatClient.isConnected()) {
+              await twitchChatClient.disconnect();
+            }
+
+            // Сбрасываем состояние
+            setChatReady(false);
+            setCurrentUserLogin(null);
+            currentUserLoginRef.current = null;
+            joinedRef.current.clear();
+
+            // Получаем токен
+            let token = await window.electronAPI.config.get('twitch.accessToken');
+            
+            try {
+              const ensured = await window.electronAPI.twitch.ensureAccessToken();
+              if (ensured) token = ensured;
+            } catch (e) {
+              console.warn('[App] не удалось обновить токен Twitch через Helix', e);
+            }
+
+            if (token) {
+              // Подключаемся к чату
+              await twitchChatClient.connect(user.login, token);
+              
+              // Устанавливаем состояние
+              setCurrentUserLogin(currentLogin);
+              currentUserLoginRef.current = currentLogin;
+              setChatReady(true);
+              
+              console.log('[App] Чат успешно переинициализирован после логина');
+            }
+            
+            isInitializing = false;
+          } else if (!currentLogin && currentUserLoginRef.current) {
+            // Если пользователь вышел, отключаемся
+            console.log('[App] Пользователь вышел, отключаемся от чата...');
+            await twitchChatClient.disconnect();
+            setChatReady(false);
+            setCurrentUserLogin(null);
+            currentUserLoginRef.current = null;
+            joinedRef.current.clear();
+          }
+        }
+      } catch (err) {
+        console.error('[App] Ошибка проверки логина:', err);
+        isInitializing = false;
+      }
+    };
+
+    // Проверяем сразу при монтировании
+    checkLoginAndInitChat();
+
+    // Затем проверяем каждую секунду для быстрой реакции на логин
+    intervalId = setInterval(checkLoginAndInitChat, 1000);
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
     };
   }, []);
 
