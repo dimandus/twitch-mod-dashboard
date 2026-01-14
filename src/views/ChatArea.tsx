@@ -989,12 +989,9 @@ const applyCommandSuggestion = (paneId: string) => {
             return (
               <div
                 key={pane.id}
-                draggable
                 onClick={() => onSelectChannel(pane.channel)}
-                onDragStart={(e) => handlePaneDragStart(e, pane.id)}
                 onDragOver={handlePaneDragOver}
                 onDrop={(e) => handlePaneDrop(e, pane.id)}
-                onDragEnd={handlePaneDragEnd}
                 style={chatPaneStyle(
                   scaledPaneWidth,
                   scaledPaneHeight,
@@ -1003,7 +1000,12 @@ const applyCommandSuggestion = (paneId: string) => {
                 )}
               >
                 {/* HEADER */}
-                <div style={paneHeaderStyle}>
+                <div
+                  draggable
+                  onDragStart={(e) => handlePaneDragStart(e, pane.id)}
+                  onDragEnd={handlePaneDragEnd}
+                  style={paneHeaderStyle}
+                >
                   <div>
                     <div
                       style={{
@@ -1651,7 +1653,8 @@ const inputStyle = (fontScale: number): React.CSSProperties => ({
   border: '1px solid #374151',
   background: '#020617',
   color: '#e5e7eb',
-  fontSize: 12 * fontScale
+  fontSize: 12 * fontScale,
+  userSelect: 'text'
 });
 
 const sendButtonStyle = (canSend: boolean): React.CSSProperties => ({
