@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useChatStore, defaultModes, modeChangeTimestamps } from '../stores/chatStore';
 import { handleError } from '../utils/errorHandler';
+import { retryWithBackoff } from '../utils/retry';
 
 export const useRoomModes = () => {
   const chatReady = useChatStore(state => state.chatReady);
@@ -19,12 +20,16 @@ export const useRoomModes = () => {
         if (lastChange && Date.now() - lastChange < 5000) continue;
 
         try {
-          const [rawSettings, rawShieldStatus] = await Promise.all([
-            window.electronAPI.twitch.getChatSettings(chanLower),
-            window.electronAPI.twitch
-              .getShieldMode(chanLower)
-              .catch(() => ({ is_active: false }))
-          ]);
+          const [rawSettings, rawShieldStatus] = await retryWithBackoff(
+            () => Promise.all([
+              window.electronAPI.twitch.getChatSettings(chanLower),
+              window.electronAPI.twitch
+                .getShieldMode(chanLower)
+                .catch(() => ({ is_active: false }))
+            ]),
+            2,
+            1000
+          );
 
           const settings = rawSettings || ({} as any);
           const shieldStatus = rawShieldStatus || ({} as any);
@@ -54,7 +59,8 @@ export const useRoomModes = () => {
             };
           });
         } catch (err) {
-          handleError(err, `RefreshSettings:${chanLower}`);
+          // Тихо игнорируем ошибки - не критично
+          console.warn(`[RefreshSettings:${chanLower}] Ошибка обновления настроек чата:`, err);
         }
       }
     };
