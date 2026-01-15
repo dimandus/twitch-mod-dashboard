@@ -3,8 +3,9 @@ import { useThemeStore } from '../stores/themeStore';
 import { AuthTab } from '../components/settings/AuthTab';
 import { ParamsTab } from '../components/settings/ParamsTab';
 import { DesignTab } from '../components/settings/DesignTab';
+import { AutoModTab } from '../components/settings/AutoModTab';
 
-type SettingsTab = 'auth' | 'params' | 'design';
+type SettingsTab = 'auth' | 'params' | 'design' | 'automod';
 
 const SettingsView: React.FC = () => {
   // Текущая вкладка настроек
@@ -217,6 +218,9 @@ const SettingsView: React.FC = () => {
         <SettingsTabButton active={tab === 'design'} onClick={() => setTab('design')}>
           Дизайн
         </SettingsTabButton>
+        <SettingsTabButton active={tab === 'automod'} onClick={() => setTab('automod')}>
+          Автомодерация
+        </SettingsTabButton>
       </div>
 
       {/* Вкладка: Авторизация */}
@@ -262,6 +266,9 @@ const SettingsView: React.FC = () => {
           onThemeChange={setTheme}
         />
       )}
+
+      {/* Вкладка: Автомодерация */}
+      {tab === 'automod' && <AutoModTab />}
 
       {/* Сообщение */}
       {message && (

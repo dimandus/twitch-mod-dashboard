@@ -2,6 +2,8 @@ import React from 'react';
 import { Badges } from './Badges';
 import { MessageWithEmotes } from './MessageWithEmotes';
 import { ChatMessage } from '../../views/ChatArea';
+import { useAutoModerationStore } from '../../stores/autoModerationStore';
+import { checkAutoModTriggers } from '../../utils/autoModHelpers';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -16,6 +18,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   badgeSets,
   onContextMenu
 }) => {
+  const { enabled: autoModEnabled, triggers } = useAutoModerationStore();
+  
+  // Проверяем сообщение на триггеры автомодерации
+  const isAutoModTriggered = !m.isSystem && autoModEnabled && checkAutoModTriggers(m.text, triggers);
   if (m.isSystem) {
     return (
       <div
@@ -43,19 +49,30 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   const isFirstMessage = !!m.isFirstMessage;
   const isSharedChat = !!m.sourceRoomId;
 
+  // Определяем фон сообщения
+  const getMessageBackground = () => {
+    if (isDeleted) return 'var(--color-chatMessageDeleted)';
+    if (isMentionedSelf) return 'var(--color-chatMessageMention)';
+    if (isRaider) return 'var(--color-chatMessageRaid)';
+    return 'var(--color-chatMessage)';
+  };
+
+  // Определяем рамку сообщения
+  const getMessageBorder = () => {
+    if (isDeleted) return '2px solid var(--color-error)';
+    if (isAutoModTriggered) return '2px solid #f59e0b'; // Желтая рамка для триггеров
+    if (isRaider) return '2px solid #3b82f6';
+    return '1px solid transparent';
+  };
+
   return (
     <div
       onContextMenu={onContextMenu}
       data-msg-id={m.msgId}
       style={{
         fontSize: 12 * textScale,
-        background: isDeleted
-          ? 'var(--color-chatMessageDeleted)'
-          : isMentionedSelf
-          ? 'var(--color-chatMessageMention)'
-          : isRaider
-          ? 'var(--color-chatMessageRaid)'
-          : 'var(--color-chatMessage)',
+        background: getMessageBackground(),
+        border: getMessageBorder(),
         borderRadius: 4,
         padding: '2px 4px',
         margin: '0 8px',
@@ -64,12 +81,12 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         gap: 4,
         opacity: isDeleted ? 0.7 : isCleared ? 0.6 : 1,
         cursor: 'context-menu',
-        borderLeft: isDeleted ? '3px solid var(--color-error)' : isRaider ? '3px solid #3b82f6' : '3px solid transparent',
         textDecoration: 'none',
         outline: isFirstMessage ? '1px solid var(--color-chatMessageFirst)' : 'none',
         flexWrap: 'wrap',
         wordBreak: 'break-word',
-        overflowWrap: 'break-word'
+        overflowWrap: 'break-word',
+        position: 'relative'
       }}
     >
       <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
@@ -137,6 +154,18 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           }}
         >
           [удалено]
+        </span>
+      )}
+      {isAutoModTriggered && (
+        <span
+          style={{
+            fontSize: 14,
+            marginLeft: 'auto',
+            flexShrink: 0
+          }}
+          title="Сообщение соответствует триггеру автомодерации"
+        >
+          ⚠️
         </span>
       )}
     </div>

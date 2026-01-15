@@ -21,6 +21,7 @@ export interface ChatMessage {
   isFirstMessage?: boolean;
   sourceRoomId?: string;
   sourceChannelName?: string;
+  autoModTriggered?: boolean; // Для будущего расширения
 }
 
 export interface ChatPane {
