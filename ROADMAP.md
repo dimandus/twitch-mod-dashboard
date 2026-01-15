@@ -163,6 +163,23 @@
 
 ---
 
+### ~~Оптимизация ре-рендеров~~ ✅
+**Статус:** Выполнено (базовая оптимизация)
+
+**Что сделано:**
+- ✅ Все обработчики в App.tsx обёрнуты в useCallback
+- ✅ TabButton обёрнут в React.memo
+- ✅ Создана документация OPTIMIZATION.md
+
+**Результат:**
+- Обработчики не пересоздаются при каждом рендере
+- Меньше ре-рендеров дочерних компонентов
+- Снижена нагрузка на CPU
+
+**Время затрачено:** 30 минут
+
+---
+
 ## 🔴 Приоритет 1: Критичные улучшения
 
 ### 1.1 Безопасность SSL ⚠️
@@ -288,42 +305,11 @@ export const darkTheme = {
 
 ## 🚀 Быстрые победы (1-2 часа)
 
-### ErrorBoundary
-```tsx
-// src/components/ErrorBoundary.tsx
-import React from 'react';
+### ~~ErrorBoundary~~ ✅
+Выполнено - см. раздел "Выполнено"
 
-export class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <div>Что-то пошло не так. Перезагрузите приложение.</div>;
-    }
-    return this.props.children;
-  }
-}
-```
-
-### Оптимизация ре-рендеров
-```typescript
-// Использовать React.memo для компонентов
-export const ChatMessage = React.memo(({ message }: Props) => {
-  // ...
-});
-
-// Использовать useCallback для функций
-const handleSend = useCallback((text: string) => {
-  // ...
-}, [dependencies]);
-```
+### ~~Оптимизация ре-рендеров~~ ✅
+Выполнено - см. раздел "Выполнено"
 
 ### Дебаунс для API запросов
 ```typescript

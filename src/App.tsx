@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import DashboardView from './views/DashboardView';
 import SettingsView from './views/SettingsView';
 import UserMessageLog from './components/UserMessageLog';
@@ -46,7 +46,7 @@ const App: React.FC = () => {
 
   const joinedRef = useRef<Set<string>>(new Set());
 
-  const markMessageAsDeleted = (channel: string, msgId: string) => {
+  const markMessageAsDeleted = useCallback((channel: string, msgId: string) => {
     if (!msgId || msgId.startsWith('local-')) return;
 
     const chanLower = channel.toLowerCase();
@@ -82,9 +82,9 @@ const App: React.FC = () => {
       }
       return updated;
     });
-  };
+  }, [setPanes, setGlobalUsers]);
 
-  const markUserMessagesAsDeleted = (channel: string, userLogin: string) => {
+  const markUserMessagesAsDeleted = useCallback((channel: string, userLogin: string) => {
     const chanLower = channel.toLowerCase();
     const loginLower = userLogin.toLowerCase();
 
@@ -119,7 +119,7 @@ const App: React.FC = () => {
         }
       };
     });
-  };
+  }, [setPanes, setGlobalUsers]);
 
   const { pendingSelfMessagesRef, currentUserLoginRef } = useChatClient(markMessageAsDeleted);
   useActiveChatters();
@@ -301,7 +301,7 @@ const App: React.FC = () => {
     syncChannels();
   }, [panes, chatReady]);
 
-  const handleSendMessage = async (channel: string, text: string) => {
+  const handleSendMessage = useCallback(async (channel: string, text: string) => {
     const chanLower = channel.toLowerCase().trim();
     const trimmed = text.trim();
     if (!chanLower || !trimmed) return;
@@ -363,9 +363,9 @@ const App: React.FC = () => {
         console.error('[App] fallback отправка через IRC не удалась', err2);
       }
     }
-  };
+  }, [setPanes]);
 
-  const handleUserModeration = async (
+  const handleUserModeration = useCallback(async (
     action: 'timeout' | 'ban' | 'unban',
     channel: string,
     duration?: number
@@ -399,9 +399,9 @@ const App: React.FC = () => {
     } catch (err) {
       handleError(err, 'UserModeration');
     }
-  };
+  }, [userLogOpen, markUserMessagesAsDeleted]);
 
-  const handleDeleteMessageFromLog = async (channel: string, msgId: string) => {
+  const handleDeleteMessageFromLog = useCallback(async (channel: string, msgId: string) => {
     if (!msgId || msgId.startsWith('local-')) {
       console.warn('[DeleteMessage] Невозможно удалить сообщение без Twitch ID');
       return;
@@ -413,9 +413,9 @@ const App: React.FC = () => {
     } catch (err) {
       handleError(err, 'DeleteMessage');
     }
-  };
+  }, [markMessageAsDeleted]);
 
-  const handleOpenUserLog = (userLogin: string) => {
+  const handleOpenUserLog = useCallback((userLogin: string) => {
     const loginLower = userLogin.toLowerCase();
     const userData = globalUsers[loginLower];
 
@@ -436,7 +436,7 @@ const App: React.FC = () => {
         messages: []
       });
     }
-  };
+  }, [globalUsers, setUserLogOpen]);
 
   return (
     <div style={appContainerStyle}>
@@ -547,7 +547,7 @@ interface TabButtonProps {
   children: React.ReactNode;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ active, onClick, children }) => (
+const TabButton: React.FC<TabButtonProps> = React.memo(({ active, onClick, children }) => (
   <button
     onClick={onClick}
     style={{
@@ -563,6 +563,6 @@ const TabButton: React.FC<TabButtonProps> = ({ active, onClick, children }) => (
   >
     {children}
   </button>
-);
+));
 
 export default App;
