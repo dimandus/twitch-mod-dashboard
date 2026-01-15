@@ -41,13 +41,31 @@ const schema = {
       }
     },
     additionalProperties: true
+  },
+  ui: {
+    type: 'object',
+    properties: {
+      chat: {
+        type: 'object',
+        properties: {
+          rows: { type: 'number', default: 1 },
+          paneWidth: { type: 'number', default: 320 },
+          paneHeight: { type: 'number', default: 260 },
+          hoverPauseKey: { type: 'string', default: 'Alt' }
+        },
+        additionalProperties: true,
+        default: {}
+      }
+    },
+    additionalProperties: true
   }
 };
 
 const store = new Store({
   name: 'config',
-  schema
-  // encryptionKey: 'если захочешь шифровать конфиг'
+  schema,
+  // Используем одинаковое имя для dev и production
+  cwd: require('electron').app.getPath('userData')
 });
 
 module.exports = store;

@@ -313,8 +313,15 @@ app.on('window-all-closed', () => {
 // ----------------- IPC: ping / config / notifications -----------------
 
 ipcMain.handle('ping', () => 'pong from main');
-ipcMain.handle('config:get', (event, key) => store.get(key));
-ipcMain.handle('config:set', (event, key, value) => store.set(key, value));
+ipcMain.handle('config:get', (event, key) => {
+  const value = store.get(key);
+  log.debug('[Config:get]', key, '=', value);
+  return value;
+});
+ipcMain.handle('config:set', (event, key, value) => {
+  log.debug('[Config:set]', key, '=', value);
+  store.set(key, value);
+});
 ipcMain.handle('config:delete', (event, key) => store.delete(key));
 
 ipcMain.on('notification:show', (event, data) => {

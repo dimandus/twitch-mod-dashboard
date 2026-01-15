@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { clampWidth, clampHeight, clampAutoScale } from '../utils/chatHelpers';
 import { logger } from '../utils/logger';
 import type { ChatMessage } from '../types/chat';
@@ -8,6 +8,8 @@ export const useChatAreaUI = () => {
   const [paneWidth, setPaneWidth] = useState(320);
   const [paneHeight, setPaneHeight] = useState(260);
   const [autoScale, setAutoScale] = useState(1);
+  
+  const isInitialMount = useRef(true);
   
   const [hoveredPaneId, setHoveredPaneId] = useState<string | null>(null);
   const [hoverPauseKeyPressed, setHoverPauseKeyPressed] = useState(false);
@@ -87,17 +89,21 @@ export const useChatAreaUI = () => {
           window.electronAPI.config.get('ui.chat.paneWidth'),
           window.electronAPI.config.get('ui.chat.paneHeight')
         ]);
+        console.log('[useChatAreaUI] Загружены настройки:', { storedRows, storedWidth, storedHeight });
         if (storedRows === 1 || storedRows === 2) setRows(storedRows);
         if (typeof storedWidth === 'number') setPaneWidth(clampWidth(storedWidth));
         if (typeof storedHeight === 'number') setPaneHeight(clampHeight(storedHeight));
+        isInitialMount.current = false;
       } catch (err) {
         console.warn('[useChatAreaUI] не удалось загрузить настройки', err);
+        isInitialMount.current = false;
       }
     })();
   }, []);
 
   // Сохранение раскладки
   useEffect(() => {
+    if (isInitialMount.current) return;
     (async () => {
       try {
         await Promise.all([
