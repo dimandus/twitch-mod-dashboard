@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useThemeStore } from '../stores/themeStore';
+import { themes, ThemeName } from '../themes';
 
 // Список необходимых scopes для полной функциональности
 const REQUIRED_SCOPES = [
@@ -43,6 +45,9 @@ const SettingsView: React.FC = () => {
   
   // Кнопка для временной паузы скролла
   const [hoverPauseKey, setHoverPauseKey] = useState<string>('Alt');
+  
+  // Тема
+  const { currentTheme, setTheme, theme } = useThemeStore();
 
   // =====================================================
   // Загрузка настроек
@@ -227,7 +232,7 @@ const SettingsView: React.FC = () => {
   // =====================================================
 
   return (
-    <div style={containerStyle}>
+    <div style={getContainerStyle(theme.colors.text)}>
       <h2 style={{ marginTop: 0 }}>Настройки</h2>
 
       {/* Вкладки настроек */}
@@ -247,7 +252,7 @@ const SettingsView: React.FC = () => {
       {tab === 'auth' && (
         <>
           {/* Twitch API */}
-          <section style={sectionStyle}>
+          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
             <h3 style={sectionTitleStyle}>🔑 Twitch API</h3>
             <p style={hintStyle}>
               Получить ключи можно на{' '}
@@ -269,7 +274,7 @@ const SettingsView: React.FC = () => {
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
                   placeholder="Например: abc123xyz..."
-                  style={inputStyle}
+                  style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
                 />
               </div>
 
@@ -280,7 +285,7 @@ const SettingsView: React.FC = () => {
                   value={clientSecret}
                   onChange={(e) => setClientSecret(e.target.value)}
                   placeholder="Секретный ключ"
-                  style={inputStyle}
+                  style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
                 />
               </div>
 
@@ -291,10 +296,10 @@ const SettingsView: React.FC = () => {
           </section>
 
           {/* Twitch аккаунт */}
-          <section style={sectionStyle}>
+          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
             <h3 style={sectionTitleStyle}>👤 Twitch аккаунт</h3>
 
-            <div style={statusBoxStyle}>
+            <div style={getStatusBoxStyle(theme.colors.chatBackground, theme.colors.border)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span
                   style={{
@@ -348,7 +353,7 @@ const SettingsView: React.FC = () => {
 
           {/* Права доступа (Scopes) */}
           {login && (
-            <section style={sectionStyle}>
+            <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
               <h3 style={sectionTitleStyle}>🔒 Права доступа (Scopes)</h3>
 
               {!hasModerationScopes && (
@@ -403,7 +408,7 @@ const SettingsView: React.FC = () => {
           )}
 
           {/* Информация */}
-          <section style={sectionStyle}>
+          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
             <h3 style={sectionTitleStyle}>ℹ️ Информация</h3>
             <div style={{ fontSize: 13, color: '#9ca3af' }}>
               <p style={{ margin: '0 0 8px 0' }}>
@@ -422,7 +427,7 @@ const SettingsView: React.FC = () => {
       {/* Вкладка: Параметры */}
       {tab === 'params' && (
         <>
-          <section style={sectionStyle}>
+          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
             <h3 style={sectionTitleStyle}>⚙️ Интерфейс чата</h3>
             <p style={hintStyle}>
               Настрой границы масштабирования шрифтов и глобального scale для области чатов.
@@ -438,7 +443,7 @@ const SettingsView: React.FC = () => {
                     step={0.1}
                     value={fontScaleMin}
                     onChange={(e) => setFontScaleMin(parseFloat(e.target.value))}
-                    style={inputStyle}
+                    style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
                   />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
@@ -448,7 +453,7 @@ const SettingsView: React.FC = () => {
                     step={0.1}
                     value={fontScaleMax}
                     onChange={(e) => setFontScaleMax(parseFloat(e.target.value))}
-                    style={inputStyle}
+                    style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
                   />
                 </div>
               </div>
@@ -461,7 +466,7 @@ const SettingsView: React.FC = () => {
                     step={0.1}
                     value={globalScaleMin}
                     onChange={(e) => setGlobalScaleMin(parseFloat(e.target.value))}
-                    style={inputStyle}
+                    style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
                   />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
@@ -471,7 +476,7 @@ const SettingsView: React.FC = () => {
                     step={0.1}
                     value={globalScaleMax}
                     onChange={(e) => setGlobalScaleMax(parseFloat(e.target.value))}
-                    style={inputStyle}
+                    style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
                   />
                 </div>
               </div>
@@ -482,7 +487,7 @@ const SettingsView: React.FC = () => {
             </div>
           </section>
 
-          <section style={sectionStyle}>
+          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
             <h3 style={sectionTitleStyle}>⌨️ Управление скроллом</h3>
             <p style={hintStyle}>
               Выбери клавишу, при зажатии которой наведение курсора на чат будет временно останавливать автоскролл.
@@ -494,7 +499,7 @@ const SettingsView: React.FC = () => {
                 <select
                   value={hoverPauseKey}
                   onChange={(e) => setHoverPauseKey(e.target.value)}
-                  style={inputStyle}
+                  style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
                 >
                   <option value="Alt">Alt</option>
                   <option value="Control">Ctrl</option>
@@ -513,11 +518,53 @@ const SettingsView: React.FC = () => {
 
       {/* Вкладка: Дизайн */}
       {tab === 'design' && (
-        <section style={sectionStyle}>
-          <h3 style={sectionTitleStyle}>🎨 Дизайн</h3>
-          <p style={{ ...hintStyle, marginBottom: 0 }}>
-            Здесь в будущем появятся настройки темы, цветов и отдельных элементов UI.
+        <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
+          <h3 style={sectionTitleStyle}>🎨 Тема оформления</h3>
+          <p style={hintStyle}>
+            Выбери тему, которая тебе нравится. Изменения применяются мгновенно.
           </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+            {(Object.keys(themes) as ThemeName[]).map((themeName) => {
+              const theme = themes[themeName];
+              const isActive = currentTheme === themeName;
+              
+              return (
+                <button
+                  key={themeName}
+                  onClick={() => setTheme(themeName)}
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    border: `2px solid ${isActive ? theme.colors.primary : theme.colors.border}`,
+                    background: theme.colors.surface,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, color: theme.colors.text }}>
+                    {theme.name}
+                  </div>
+                  
+                  {/* Превью цветов */}
+                  <div style={{ display: 'flex', gap: 4, height: 24 }}>
+                    <div style={{ flex: 1, background: theme.colors.background, borderRadius: 4 }} />
+                    <div style={{ flex: 1, background: theme.colors.primary, borderRadius: 4 }} />
+                    <div style={{ flex: 1, background: theme.colors.success, borderRadius: 4 }} />
+                  </div>
+                  
+                  {isActive && (
+                    <div style={{ fontSize: 11, color: theme.colors.primary, fontWeight: 600 }}>
+                      ✓ Активна
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </section>
       )}
 
@@ -551,19 +598,25 @@ const containerStyle: React.CSSProperties = {
   color: '#e5e7eb'
 };
 
+const getContainerStyle = (textColor: string): React.CSSProperties => ({
+  padding: 24,
+  maxWidth: 700,
+  color: textColor
+});
+
 const tabsContainerStyle: React.CSSProperties = {
   display: 'flex',
   gap: 8,
   marginBottom: 16
 };
 
-const sectionStyle: React.CSSProperties = {
+const getSectionStyle = (surface: string, border: string): React.CSSProperties => ({
   marginBottom: 24,
   padding: 16,
-  background: '#111827',
+  background: surface,
   borderRadius: 8,
-  border: '1px solid #27272f'
-};
+  border: `1px solid ${border}`
+});
 
 const sectionTitleStyle: React.CSSProperties = {
   margin: '0 0 12px 0',
@@ -584,15 +637,15 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 4
 };
 
-const inputStyle: React.CSSProperties = {
+const getInputStyle = (bg: string, border: string, text: string): React.CSSProperties => ({
   width: '100%',
   padding: '8px 10px',
   borderRadius: 6,
-  border: '1px solid #374151',
-  background: '#020617',
-  color: '#e5e7eb',
+  border: `1px solid ${border}`,
+  background: bg,
+  color: text,
   fontSize: 13
-};
+});
 
 const linkStyle: React.CSSProperties = {
   color: '#60a5fa',
@@ -603,7 +656,7 @@ const buttonPrimaryStyle: React.CSSProperties = {
   padding: '8px 16px',
   borderRadius: 6,
   border: 'none',
-  background: '#9147ff',
+  background: 'var(--color-primary)',
   color: '#fff',
   fontSize: 13,
   fontWeight: 500,
@@ -613,9 +666,9 @@ const buttonPrimaryStyle: React.CSSProperties = {
 const buttonSecondaryStyle: React.CSSProperties = {
   padding: '8px 16px',
   borderRadius: 6,
-  border: '1px solid #4b5563',
-  background: '#1f2937',
-  color: '#e5e7eb',
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-buttonSecondary)',
+  color: 'var(--color-text)',
   fontSize: 13,
   cursor: 'pointer'
 };
@@ -623,25 +676,25 @@ const buttonSecondaryStyle: React.CSSProperties = {
 const buttonDangerStyle: React.CSSProperties = {
   padding: '8px 16px',
   borderRadius: 6,
-  border: '1px solid #ef4444',
+  border: '1px solid var(--color-error)',
   background: 'transparent',
-  color: '#fca5a5',
+  color: 'var(--color-error)',
   fontSize: 13,
   cursor: 'pointer'
 };
 
-const statusBoxStyle: React.CSSProperties = {
+const getStatusBoxStyle = (bg: string, border: string): React.CSSProperties => ({
   padding: '10px 12px',
-  background: '#020617',
+  background: bg,
   borderRadius: 6,
-  border: '1px solid #374151'
-};
+  border: `1px solid ${border}`
+});
 
 const warningBoxStyle: React.CSSProperties = {
   padding: 12,
   background: '#7f1d1d33',
   borderRadius: 6,
-  border: '1px solid #ef4444',
+  border: '1px solid var(--color-error)',
   color: '#fecaca',
   fontSize: 13
 };
@@ -651,8 +704,8 @@ const messageStyle: React.CSSProperties = {
   bottom: 24,
   right: 24,
   padding: '10px 16px',
-  background: '#111827',
-  border: '1px solid #4b5563',
+  background: 'var(--color-surface)',
+  border: '1px solid var(--color-border)',
   borderRadius: 6,
   fontSize: 13,
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
@@ -676,9 +729,9 @@ const SettingsTabButton: React.FC<SettingsTabButtonProps> = ({
     style={{
       padding: '6px 12px',
       borderRadius: 999,
-      border: '1px solid #4b5563',
-      background: active ? '#4b5563' : 'transparent',
-      color: '#e5e7eb',
+      border: '1px solid var(--color-border)',
+      background: active ? 'var(--color-primary)' : 'transparent',
+      color: active ? '#fff' : 'var(--color-text)',
       fontSize: 12,
       cursor: 'pointer'
     }}

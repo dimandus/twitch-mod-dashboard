@@ -477,8 +477,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       style={{
         height: '100%',
         display: 'flex',
-        background: '#0b0b10',
-        color: '#e5e7eb'
+        background: 'var(--color-chatBackground)',
+        color: 'var(--color-text)'
       }}
     >
       <Sidebar

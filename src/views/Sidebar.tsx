@@ -604,7 +604,7 @@ if (selectedChannel) {
               style={{
                 fontSize: 12 * textScale,
                 textTransform: 'uppercase',
-                color: '#9ca3af'
+                color: 'var(--color-textSecondary)'
               }}
             >
               Навигация
@@ -654,7 +654,7 @@ if (selectedChannel) {
                     style={{
                       ...iconButtonStyle,
                       fontSize: 12 * textScale,
-                      color: '#22c55e',
+                      color: 'var(--color-success)',
                       opacity: modChannelsLoading ? 0.5 : 1
                     }}
                     title="Модерируемые"
@@ -741,7 +741,7 @@ if (selectedChannel) {
                     st.isLive === undefined
                       ? '#4b5563'
                       : st.isLive
-                      ? '#22c55e'
+                      ? 'var(--color-success)'
                       : '#ef4444';
                   return (
                     <button
@@ -800,7 +800,7 @@ if (selectedChannel) {
                         <span
                           style={{
                             fontSize: 11 * textScale,
-                            color: '#9ca3af',
+                            color: 'var(--color-textSecondary)',
                             marginLeft: 'auto',
                             flexShrink: 0
                           }}
@@ -847,7 +847,7 @@ if (selectedChannel) {
                       style={{
                         marginLeft: 4,
                         fontSize: 10 * textScale,
-                        color: isModeratorMode ? '#22c55e' : '#9ca3af'
+                        color: isModeratorMode ? 'var(--color-success)' : 'var(--color-textSecondary)'
                       }}
                     >
                       {isModeratorMode
@@ -949,7 +949,7 @@ if (selectedChannel) {
                           const roleBgStyle = isModOrBroadcastor
                             ? {
                                 backgroundColor: 'rgba(0,0,0,0.4)',
-                                borderLeft: '3px solid #9147ff'
+                                borderLeft: '3px solid var(--color-primary)'
                               }
                             : {};
 
@@ -1312,7 +1312,7 @@ if (selectedChannel) {
                   t.type === 'error'
                     ? '#ef4444'
                     : t.type === 'success'
-                    ? '#22c55e'
+                    ? 'var(--color-success)'
                     : '#4b5563'
               }}
             >
@@ -1339,8 +1339,8 @@ const activityDotStyle = (progress: number): React.CSSProperties => {
     border: '1px solid #4b5563',
     background:
       clamped <= 0
-        ? '#111827'
-        : `conic-gradient(#22c55e ${angle}deg, #111827 ${angle}deg)`,
+        ? 'var(--color-surface)'
+        : `conic-gradient(var(--color-success) ${angle}deg, var(--color-surface) ${angle}deg)`,
     flexShrink: 0
   };
 };
@@ -1348,7 +1348,7 @@ const activityDotStyle = (progress: number): React.CSSProperties => {
 const sidebarStyle = (collapsed: boolean): React.CSSProperties => ({
   display: 'flex',
   flexDirection: 'column',
-  borderRight: '1px solid #27272f',
+  borderRight: '1px solid var(--color-border)',
   transition: 'width 0.2s ease',
   width: collapsed ? 36 : '20%',
   minWidth: collapsed ? 36 : 220,
@@ -1364,8 +1364,8 @@ const sidebarHeaderStyle = (
   alignItems: 'center',
   justifyContent: collapsed ? 'center' : 'space-between',
   padding: '6px 8px',
-  borderBottom: '1px solid #27272f',
-  background: '#111827',
+  borderBottom: '1px solid var(--color-border)',
+  background: 'var(--color-surface)',
   flexShrink: 0
 });
 
@@ -1375,14 +1375,14 @@ const collapseButtonStyle: React.CSSProperties = {
   borderRadius: 4,
   border: '1px solid #4b5563',
   background: '#1f2933',
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   fontSize: 10,
   cursor: 'pointer'
 };
 
 const sectionStyle: React.CSSProperties = {
   flex: 1,
-  borderBottom: '1px solid #27272f',
+  borderBottom: '1px solid var(--color-border)',
   display: 'flex',
   flexDirection: 'column',
   minHeight: 0
@@ -1392,7 +1392,7 @@ const sectionHeaderStyle: React.CSSProperties = {
   padding: '6px 8px',
   fontSize: 12,
   textTransform: 'uppercase',
-  color: '#9ca3af',
+  color: 'var(--color-textSecondary)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -1413,7 +1413,7 @@ const iconButtonStyle: React.CSSProperties = {
   borderRadius: 4,
   border: '1px solid #4b5563',
   background: '#1f2933',
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   fontSize: 12,
   cursor: 'pointer',
   padding: 0,
@@ -1432,7 +1432,7 @@ const channelButtonStyle = (
   borderRadius: 6,
   border: 'none',
   background: active ? '#4b5563' : 'transparent',
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   fontSize: 13,
   cursor: 'pointer',
   whiteSpace: 'nowrap',
@@ -1445,7 +1445,7 @@ const channelRemoveButtonStyle: React.CSSProperties = {
   padding: '0 4px',
   borderRadius: 4,
   fontSize: 11,
-  color: '#9ca3af',
+  color: 'var(--color-textSecondary)',
   border: 'none',
   background: 'transparent',
   cursor: 'pointer',
@@ -1457,9 +1457,9 @@ const channelFilterButtonStyle = (
 ): React.CSSProperties => ({
   padding: '2px 6px',
   borderRadius: 999,
-  border: `1px solid ${active ? '#9147ff' : '#4b5563'}`,
+  border: `1px solid ${active ? 'var(--color-primary)' : '#4b5563'}`,
   background: active ? '#1f2937' : 'transparent',
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   fontSize: 10,
   cursor: 'pointer'
 });
@@ -1484,7 +1484,7 @@ const modalOverlayStyle: React.CSSProperties = {
 };
 
 const modalContentStyle: React.CSSProperties = {
-  background: '#111827',
+  background: 'var(--color-surface)',
   padding: '16px 20px',
   borderRadius: 8,
   width: 320,
@@ -1497,7 +1497,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 6,
   border: '1px solid #374151',
   background: '#020617',
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   fontSize: 13
 };
 
@@ -1506,7 +1506,7 @@ const buttonSecondaryStyle: React.CSSProperties = {
   borderRadius: 6,
   border: '1px solid #4b5563',
   background: '#1f2933',
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   fontSize: 13,
   cursor: 'pointer'
 };
@@ -1515,7 +1515,7 @@ const buttonPrimaryStyle: React.CSSProperties = {
   padding: '4px 10px',
   borderRadius: 6,
   border: 'none',
-  background: '#9147ff',
+  background: 'var(--color-primary)',
   color: '#fff',
   fontSize: 13,
   cursor: 'pointer'
@@ -1528,7 +1528,7 @@ const contextMenuStyle = (
   position: 'fixed',
   top: y,
   left: x,
-  background: '#111827',
+  background: 'var(--color-surface)',
   border: '1px solid #374151',
   borderRadius: 6,
   padding: 4,
@@ -1540,8 +1540,8 @@ const contextMenuStyle = (
 const contextMenuHeaderStyle: React.CSSProperties = {
   padding: '4px 8px',
   fontSize: 12,
-  color: '#9ca3af',
-  borderBottom: '1px solid #27272f',
+  color: 'var(--color-textSecondary)',
+  borderBottom: '1px solid var(--color-border)',
   marginBottom: 4
 };
 
@@ -1552,14 +1552,14 @@ const menuItemStyle: React.CSSProperties = {
   borderRadius: 4,
   border: 'none',
   background: 'transparent',
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   fontSize: 12,
   cursor: 'pointer',
   whiteSpace: 'nowrap'
 };
 
 const menuDividerStyle: React.CSSProperties = {
-  borderTop: '1px solid #27272f',
+  borderTop: '1px solid var(--color-border)',
   margin: '4px 0'
 };
 
@@ -1574,12 +1574,12 @@ const toastContainerStyle: React.CSSProperties = {
 };
 
 const toastStyle: React.CSSProperties = {
-  background: '#111827',
+  background: 'var(--color-surface)',
   border: '1px solid #4b5563',
   borderRadius: 6,
   padding: '6px 10px',
   fontSize: 12,
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
 };
 
@@ -1655,7 +1655,7 @@ function renderBadges(
   // 2) Фолбэк: текстовые бейджи
   const mapping: Record<string, { label: string; color: string }> = {
     broadcaster: { label: 'S', color: '#a855f7' },
-    moderator: { label: 'M', color: '#22c55e' },
+    moderator: { label: 'M', color: 'var(--color-success)' },
     vip: { label: 'V', color: '#0ea5e9' },
     subscriber: { label: 'Sub', color: '#f97316' },
     staff: { label: 'T', color: '#f97316' },

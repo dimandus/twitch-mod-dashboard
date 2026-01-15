@@ -891,7 +891,7 @@ const applyCommandSuggestion = (paneId: string) => {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        borderLeft: '1px solid #27272f',
+        borderLeft: '1px solid var(--color-border)',
         width: '100%',
         overflowX: 'hidden'
       }}
@@ -905,23 +905,23 @@ const applyCommandSuggestion = (paneId: string) => {
     >
       <div style={topPanelStyle}>
         <div>
-          <div style={{ fontSize: 13 * textScale, color: '#9ca3af' }}>Область чатов</div>
-          <div style={{ fontSize: 11 * textScale, color: '#6b7280' }}>
+          <div style={{ fontSize: 13 * textScale, color: 'var(--color-textSecondary)' }}>Область чатов</div>
+          <div style={{ fontSize: 11 * textScale, color: 'var(--color-textMuted)' }}>
             ПКМ по каналу или перетащи сюда
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {selectedChannel && (
-            <div style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>
+            <div style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>
               Канал:{' '}
-              <strong style={{ color: '#e5e7eb' }}>
+              <strong style={{ color: 'var(--color-text)' }}>
                 {selectedChannel}
               </strong>
             </div>
           )}
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Строки:</span>
+            <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Строки:</span>
             <button
               onClick={() => setRows(1)}
               style={rowButtonStyle(rows === 1)}
@@ -937,7 +937,7 @@ const applyCommandSuggestion = (paneId: string) => {
           </div>
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Размер:</span>
+            <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Размер:</span>
             <button
               onClick={() => changePaneWidth(-20)}
               style={sizeButtonStyle}
@@ -965,7 +965,7 @@ const applyCommandSuggestion = (paneId: string) => {
           </div>
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Шрифт:</span>
+            <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Шрифт:</span>
             <button
               onClick={() => changeFontScale(-0.1)}
               style={sizeButtonStyle}
@@ -981,7 +981,7 @@ const applyCommandSuggestion = (paneId: string) => {
           </div>
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 11 * textScale, color: '#9ca3af' }}>Scale:</span>
+            <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Scale:</span>
             <button
               onClick={() => changeGlobalScale(-0.1)}
               style={sizeButtonStyle}
@@ -1047,7 +1047,7 @@ const applyCommandSuggestion = (paneId: string) => {
                     <div
                       style={{
                         fontSize: 12 * textScale,
-                        color: '#9ca3af',
+                        color: 'var(--color-textSecondary)',
                         textTransform: 'uppercase'
                       }}
                     >
@@ -1103,7 +1103,7 @@ const applyCommandSuggestion = (paneId: string) => {
                       e.stopPropagation();
                       onModeToggle(pane.channel, 'shield');
                     }}
-                    style={modeButtonStyle(modes.shield, '#ef4444')}
+                    style={modeButtonStyle(modes.shield, 'var(--color-error)')}
                     title="Защитный режим"
                   >
                     🛡️
@@ -1379,7 +1379,7 @@ const applyCommandSuggestion = (paneId: string) => {
         }}
       >
         <span style={{ fontWeight: 600 }}>{cmd.name}</span>
-        <span style={{ color: '#9ca3af', marginLeft: 8, fontSize: 11 }}>
+        <span style={{ color: 'var(--color-textSecondary)', marginLeft: 8, fontSize: 11 }}>
           {cmd.desc}
         </span>
       </div>
@@ -1438,7 +1438,7 @@ const applyCommandSuggestion = (paneId: string) => {
 
                         if (!list.length) {
                           return (
-                            <div style={{ fontSize: 11 * textScale, color: '#9ca3af', padding: 4 }}>
+                            <div style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)', padding: 4 }}>
                               Нет эмотов для этой вкладки.
                             </div>
                           );
@@ -1600,8 +1600,8 @@ export default ChatArea;
 
 const topPanelStyle: React.CSSProperties = {
   padding: '6px 12px',
-  borderBottom: '1px solid #27272f',
-  background: '#111827',
+  borderBottom: '1px solid var(--color-border)',
+  background: 'var(--color-chatMessage)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -1610,7 +1610,7 @@ const topPanelStyle: React.CSSProperties = {
 
 const chatsContainerStyle = (isTwoRows: boolean): React.CSSProperties => ({
   flex: 1,
-  background: '#020617',
+  background: 'var(--color-chatBackground)',
   padding: 8,
   overflowX: isTwoRows ? 'hidden' : 'auto',
   overflowY: isTwoRows ? 'auto' : 'hidden'
@@ -1632,8 +1632,8 @@ const emptyStateStyle = (isDropActive: boolean): React.CSSProperties => ({
   border: isDropActive
     ? '1px dashed #4ade80'
     : '1px dashed #374151',
-  background: '#020617',
-  color: '#6b7280',
+  background: 'var(--color-chatBackground)',
+  color: 'var(--color-textMuted)',
   fontSize: 13,
   display: 'flex',
   alignItems: 'center',
@@ -1657,15 +1657,15 @@ const chatPaneStyle = (
   flexDirection: 'column',
   borderRadius: 8,
   border: `1px solid ${
-    isDragging ? '#fbbf24' : isSelected ? '#4ade80' : '#27272f'
+    isDragging ? '#fbbf24' : isSelected ? '#4ade80' : 'var(--color-border)'
   }`,
-  background: '#020617',
+  background: 'var(--color-chatBackground)',
   overflow: 'hidden'
 });
 
 const paneHeaderStyle: React.CSSProperties = {
   padding: '4px 8px',
-  borderBottom: '1px solid #27272f',
+  borderBottom: '1px solid var(--color-border)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -1675,7 +1675,7 @@ const paneHeaderStyle: React.CSSProperties = {
 
 const modesBarStyle: React.CSSProperties = {
   padding: '2px 4px',
-  borderBottom: '1px solid #27272f',
+  borderBottom: '1px solid var(--color-border)',
   display: 'flex',
   alignItems: 'center',
   gap: 4,
@@ -1694,7 +1694,7 @@ const messagesContainerStyle: React.CSSProperties = {
 };
 
 const inputContainerStyle: React.CSSProperties = {
-  borderTop: '1px solid #27272f',
+  borderTop: '1px solid var(--color-border)',
   padding: 6,
   display: 'flex',
   gap: 6,
@@ -1706,8 +1706,8 @@ const inputStyle = (fontScale: number): React.CSSProperties => ({
   padding: '4px 6px',
   borderRadius: 6,
   border: '1px solid #374151',
-  background: '#020617',
-  color: '#e5e7eb',
+  background: 'var(--color-chatBackground)',
+  color: 'var(--color-text)',
   fontSize: 12 * fontScale,
   userSelect: 'text'
 });
@@ -1715,9 +1715,9 @@ const inputStyle = (fontScale: number): React.CSSProperties => ({
 const sendButtonStyle = (canSend: boolean): React.CSSProperties => ({
   padding: '4px 10px',
   borderRadius: 6,
-  border: '1px solid #4b5563',
-  background: canSend ? '#4b5563' : '#1f2933',
-  color: '#e5e7eb',
+  border: '1px solid var(--color-border)',
+  background: canSend ? 'var(--color-border)' : 'var(--color-modInactive)',
+  color: 'var(--color-text)',
   fontSize: 12,
   cursor: canSend ? 'pointer' : 'default',
   opacity: canSend ? 1 : 0.6
@@ -1726,9 +1726,9 @@ const sendButtonStyle = (canSend: boolean): React.CSSProperties => ({
 const emojiButtonStyle: React.CSSProperties = {
   padding: '4px 8px',
   borderRadius: 6,
-  border: '1px solid #4b5563',
-  background: '#1f2933',
-  color: '#e5e7eb',
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-modInactive)',
+  color: 'var(--color-text)',
   fontSize: 12,
   cursor: 'pointer'
 };
@@ -1737,9 +1737,9 @@ const iconButtonStyle: React.CSSProperties = {
   width: 22,
   height: 22,
   borderRadius: 4,
-  border: '1px solid #4b5563',
-  background: '#1f2933',
-  color: '#e5e7eb',
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-modInactive)',
+  color: 'var(--color-text)',
   fontSize: 11,
   cursor: 'pointer',
   padding: 0
@@ -1749,9 +1749,9 @@ const sizeButtonStyle: React.CSSProperties = {
   width: 26,
   height: 20,
   borderRadius: 4,
-  border: '1px solid #4b5563',
-  background: '#1f2933',
-  color: '#e5e7eb',
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-modInactive)',
+  color: 'var(--color-text)',
   fontSize: 10,
   cursor: 'pointer',
   padding: 0
@@ -1761,9 +1761,9 @@ const rowButtonStyle = (active: boolean): React.CSSProperties => ({
   width: 20,
   height: 20,
   borderRadius: 4,
-  border: '1px solid #4b5563',
-  background: active ? '#4b5563' : '#1f2933',
-  color: '#e5e7eb',
+  border: '1px solid var(--color-border)',
+  background: active ? 'var(--color-border)' : 'var(--color-modInactive)',
+  color: 'var(--color-text)',
   fontSize: 11,
   cursor: 'pointer',
   padding: 0
@@ -1774,7 +1774,7 @@ const dropdownMenuStyle: React.CSSProperties = {
   top: '100%',
   left: 0,
   zIndex: 100,
-  background: '#111827',
+  background: 'var(--color-chatMessage)',
   border: '1px solid #374151',
   borderRadius: 6,
   padding: 4,
@@ -1789,7 +1789,7 @@ const mentionBoxStyle = (fontScale: number): React.CSSProperties => ({
   right: 6,
   maxHeight: 150,
   overflowY: 'auto',
-  background: '#111827',
+  background: 'var(--color-chatMessage)',
   border: '1px solid #374151',
   borderRadius: 6,
   zIndex: 2000,
@@ -1800,8 +1800,8 @@ const mentionBoxStyle = (fontScale: number): React.CSSProperties => ({
 const mentionItemStyle = (active: boolean): React.CSSProperties => ({
   padding: '4px 8px',
   cursor: 'pointer',
-  background: active ? '#4b5563' : 'transparent',
-  color: '#e5e7eb'
+  background: active ? 'var(--color-border)' : 'transparent',
+  color: 'var(--color-text)'
 });
 
 const dropdownItemStyle = (selected: boolean): React.CSSProperties => ({
@@ -1810,8 +1810,8 @@ const dropdownItemStyle = (selected: boolean): React.CSSProperties => ({
   padding: '4px 8px',
   borderRadius: 4,
   border: 'none',
-  background: selected ? '#4b5563' : 'transparent',
-  color: '#e5e7eb',
+  background: selected ? 'var(--color-border)' : 'transparent',
+  color: 'var(--color-text)',
   fontSize: 11,
   cursor: 'pointer',
   marginBottom: 2
@@ -1824,17 +1824,17 @@ function modeButtonStyle(
   return {
     padding: '1px 4px',
     borderRadius: 4,
-    border: `1px solid ${active ? activeColor : '#4b5563'}`,
+    border: `1px solid ${active ? activeColor : 'var(--color-border)'}`,
     background: active
-      ? activeColor === '#ef4444'
+      ? activeColor === 'var(--color-error)'
         ? '#7f1d1d'
-        : '#166534'
-      : '#1f2933',
+        : 'var(--color-modActive)'
+      : 'var(--color-modInactive)',
     color: active
-      ? activeColor === '#ef4444'
+      ? activeColor === 'var(--color-error)'
         ? '#fecaca'
         : '#bbf7d0'
-      : '#e5e7eb',
+      : 'var(--color-text)',
     fontSize: 9,
     cursor: 'pointer',
     display: 'inline-flex',
@@ -1852,12 +1852,12 @@ const messageStyle = (
 ): React.CSSProperties => ({
   fontSize: 12 * fontScale,
   background: isDeleted
-    ? '#291415'
+    ? 'var(--color-chatMessageDeleted)'
     : isMentionedSelf
-    ? '#bd8700'
+    ? 'var(--color-chatMessageMention)'
     : isRaider
-    ? '#1e3a5f'
-    : '#111827',
+    ? 'var(--color-chatMessageRaid)'
+    : 'var(--color-chatMessage)',
   borderRadius: 4,
   padding: '2px 4px',
   display: 'flex',
@@ -1865,9 +1865,9 @@ const messageStyle = (
   gap: 4,
   opacity: isDeleted ? 0.7 : isCleared ? 0.6 : 1,
   cursor: 'context-menu',
-  borderLeft: isDeleted ? '3px solid #ef4444' : isRaider ? '3px solid #3b82f6' : '3px solid transparent',
+  borderLeft: isDeleted ? '3px solid var(--color-error)' : isRaider ? '3px solid #3b82f6' : '3px solid transparent',
   textDecoration: 'none',
-  outline: isFirstMessage ? '1px solid #eab308' : 'none',
+  outline: isFirstMessage ? '1px solid var(--color-chatMessageFirst)' : 'none',
   flexWrap: 'wrap',
   wordBreak: 'break-word',
   overflowWrap: 'break-word'
@@ -1882,10 +1882,10 @@ const usernameStyle = (
   fontWeight: 600,
   fontSize: 12 * fontScale,
   color: isDeleted
-    ? '#9ca3af'
+    ? 'var(--color-textSecondary)'
     : isCleared
-    ? '#6b7280'
-    : color || '#e5e7eb',
+    ? 'var(--color-textMuted)'
+    : color || 'var(--color-text)',
   marginRight: 4,
   textDecoration: 'none',
   flexShrink: 0
@@ -1897,7 +1897,7 @@ const messageTextStyle = (
   fontScale: number = 1
 ): React.CSSProperties => ({
   fontSize: 12 * fontScale,
-  color: isDeleted ? '#9ca3af' : isCleared ? '#6b7280' : '#e5e7eb',
+  color: isDeleted ? 'var(--color-textSecondary)' : isCleared ? 'var(--color-textMuted)' : 'var(--color-text)',
   textDecoration: isDeleted ? 'line-through' : 'none',
   wordBreak: 'break-word',
   overflowWrap: 'break-word',
@@ -1907,7 +1907,7 @@ const messageTextStyle = (
 
 const deletedLabelStyle: React.CSSProperties = {
   fontSize: 10,
-  color: '#ef4444',
+  color: 'var(--color-error)',
   marginLeft: 'auto',
   flexShrink: 0,
   fontStyle: 'italic',
@@ -1918,7 +1918,7 @@ const contextMenuStyle = (x: number, y: number): React.CSSProperties => ({
   position: 'fixed',
   top: y,
   left: x,
-  background: '#111827',
+  background: 'var(--color-chatMessage)',
   border: '1px solid #374151',
   borderRadius: 6,
   padding: 4,
@@ -1930,8 +1930,8 @@ const contextMenuStyle = (x: number, y: number): React.CSSProperties => ({
 const contextMenuHeaderStyle: React.CSSProperties = {
   padding: '4px 8px',
   fontSize: 12,
-  color: '#9ca3af',
-  borderBottom: '1px solid #27272f',
+  color: 'var(--color-textSecondary)',
+  borderBottom: '1px solid var(--color-border)',
   marginBottom: 4
 };
 
@@ -1942,26 +1942,26 @@ const menuItemStyle: React.CSSProperties = {
   borderRadius: 4,
   border: 'none',
   background: 'transparent',
-  color: '#e5e7eb',
+  color: 'var(--color-text)',
   fontSize: 12,
   cursor: 'pointer',
   whiteSpace: 'nowrap'
 };
 
 const menuDividerStyle: React.CSSProperties = {
-  borderTop: '1px solid #27272f',
+  borderTop: '1px solid var(--color-border)',
   margin: '4px 0'
 };
 
 const systemMessageStyle = (fontScale: number): React.CSSProperties => ({
   textAlign: 'center',
-  color: '#9ca3af',
+  color: 'var(--color-textSecondary)',
   fontSize: 11 * fontScale,
   padding: '4px 0',
   borderTop: '1px solid #374151',
   borderBottom: '1px solid #374151',
   margin: '8px 0',
-  background: '#1f2937',
+  background: 'var(--color-surfaceHover)',
   fontStyle: 'italic'
 });
 
@@ -1972,7 +1972,7 @@ const emotePickerStyle: React.CSSProperties = {
   right: 6,
   maxHeight: 230,
   overflowY: 'auto',
-  background: '#111827',
+  background: 'var(--color-chatMessage)',
   border: '1px solid #374151',
   borderRadius: 6,
   zIndex: 1900,
@@ -1990,9 +1990,9 @@ const emoteTabButtonStyle = (active: boolean): React.CSSProperties => ({
   flex: 1,
   padding: '2px 4px',
   borderRadius: 4,
-  border: '1px solid #4b5563',
-  background: active ? '#4b5563' : '#1f2933',
-  color: '#e5e7eb',
+  border: '1px solid var(--color-border)',
+  background: active ? 'var(--color-border)' : 'var(--color-modInactive)',
+  color: 'var(--color-text)',
   fontSize: 11,
   cursor: 'pointer'
 });
@@ -2008,7 +2008,7 @@ const emoteButtonStyle: React.CSSProperties = {
   height: 30,
   borderRadius: 4,
   border: 'none',
-  background: '#1f2933',
+  background: 'var(--color-modInactive)',
   padding: 2,
   cursor: 'pointer',
   display: 'flex',
@@ -2023,7 +2023,7 @@ const commandBoxStyle: React.CSSProperties = {
   right: 6,
   maxHeight: 150,
   overflowY: 'auto',
-  background: '#111827',
+  background: 'var(--color-chatMessage)',
   border: '1px solid #374151',
   borderRadius: 6,
   zIndex: 2100,
@@ -2034,8 +2034,8 @@ const commandBoxStyle: React.CSSProperties = {
 const commandItemStyle = (active: boolean): React.CSSProperties => ({
   padding: '4px 8px',
   cursor: 'pointer',
-  background: active ? '#4b5563' : 'transparent',
-  color: '#e5e7eb',
+  background: active ? 'var(--color-border)' : 'transparent',
+  color: 'var(--color-text)',
   display: 'flex',
   alignItems: 'center'
 });
@@ -2148,7 +2148,7 @@ function renderBadges(
 
   const mapping: Record<string, { label: string; color: string }> = {
     broadcaster: { label: 'S', color: '#a855f7' },
-    moderator: { label: 'M', color: '#22c55e' },
+    moderator: { label: 'M', color: 'var(--color-success)' },
     vip: { label: 'V', color: '#0ea5e9' },
     subscriber: { label: 'Sub', color: '#f97316' },
     staff: { label: 'T', color: '#f97316' },
@@ -2175,7 +2175,7 @@ function renderBadges(
           lineHeight: '14px',
           textAlign: 'center',
           background: info.color,
-          color: '#020617',
+          color: 'var(--color-chatBackground)',
           fontWeight: 700,
           padding: '0 2px',
           marginRight: 2,
@@ -2238,3 +2238,6 @@ function renderMessageWithEmotes(
   }
   return result;
 }
+
+
+

@@ -8,6 +8,8 @@ import NotificationContainer from './components/NotificationContainer';
 import { useChatStore } from './stores/chatStore';
 import { useUserStore } from './stores/userStore';
 import { useModerationStore } from './stores/moderationStore';
+import { useThemeStore } from './stores/themeStore';
+import { useApplyTheme } from './hooks/useApplyTheme';
 import { useChatClient } from './hooks/useChatClient';
 import { useActiveChatters } from './hooks/useActiveChatters';
 import { useRoomModes } from './hooks/useRoomModes';
@@ -45,6 +47,16 @@ const App: React.FC = () => {
   const closeUserLog = useModerationStore(state => state.closeUserLog);
 
   const joinedRef = useRef<Set<string>>(new Set());
+  
+  const { theme, loadTheme } = useThemeStore();
+  
+  // Применяем тему через CSS переменные
+  useApplyTheme();
+  
+  // Загрузка темы при старте
+  useEffect(() => {
+    loadTheme();
+  }, [loadTheme]);
 
   const markMessageAsDeleted = useCallback((channel: string, msgId: string) => {
     if (!msgId || msgId.startsWith('local-')) return;
@@ -439,9 +451,9 @@ const App: React.FC = () => {
   }, [globalUsers, setUserLogOpen]);
 
   return (
-    <div style={appContainerStyle}>
+    <div style={getAppContainerStyle(theme.colors.background)}>
       <NotificationContainer />
-      <header style={headerStyle}>
+      <header style={getHeaderStyle(theme.colors.border)}>
         <h1 style={titleStyle}>Twitch Mod Dashboard</h1>
         <TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>
           Dashboard
@@ -451,7 +463,7 @@ const App: React.FC = () => {
         </TabButton>
         <button
           onClick={() => setAutoModQueueOpen(true)}
-          style={automodButtonStyle}
+          style={getAutomodButtonStyle(theme.colors.primary)}
           title="AutoMod Очередь"
         >
           🛡️ AutoMod
@@ -502,21 +514,21 @@ const App: React.FC = () => {
   );
 };
 
-const appContainerStyle: React.CSSProperties = {
+const getAppContainerStyle = (bgColor: string): React.CSSProperties => ({
   height: '100vh',
   display: 'flex',
   flexDirection: 'column',
-  color: '#fff',
-  background: '#18181b'
-};
+  color: 'var(--color-text)',
+  background: 'var(--color-background)'
+});
 
-const headerStyle: React.CSSProperties = {
+const getHeaderStyle = (borderColor: string): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   padding: '8px 16px',
-  borderBottom: '1px solid #27272f',
+  borderBottom: '1px solid var(--color-border)',
   flexShrink: 0
-};
+});
 
 const titleStyle: React.CSSProperties = {
   fontSize: 18,
@@ -529,17 +541,17 @@ const mainStyle: React.CSSProperties = {
   overflow: 'hidden'
 };
 
-const automodButtonStyle: React.CSSProperties = {
+const getAutomodButtonStyle = (primaryColor: string): React.CSSProperties => ({
   marginLeft: 'auto',
   padding: '6px 12px',
-  background: '#9147ff',
+  background: 'var(--color-primary)',
   color: '#fff',
   border: 'none',
   borderRadius: 4,
   cursor: 'pointer',
   fontSize: 13,
   fontWeight: 'bold'
-};
+});
 
 interface TabButtonProps {
   active: boolean;
@@ -553,9 +565,9 @@ const TabButton: React.FC<TabButtonProps> = React.memo(({ active, onClick, child
     style={{
       padding: '6px 12px',
       marginRight: 8,
-      background: active ? '#9147ff' : 'transparent',
-      color: '#fff',
-      border: active ? 'none' : '1px solid #3f3f46',
+      background: active ? 'var(--color-primary)' : 'transparent',
+      color: active ? '#fff' : 'var(--color-text)',
+      border: active ? 'none' : '1px solid var(--color-border)',
       borderRadius: 4,
       cursor: 'pointer',
       fontSize: 13

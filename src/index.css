@@ -1,0 +1,95 @@
+:root {
+  /* Цвета темы (устанавливаются через JS) */
+  --color-background: #18181b;
+  --color-surface: #111827;
+  --color-surfaceHover: #1f2937;
+  --color-border: #27272f;
+  
+  --color-text: #e5e7eb;
+  --color-textSecondary: #9ca3af;
+  --color-textMuted: #6b7280;
+  
+  --color-primary: #9147ff;
+  --color-primaryHover: #7c3aed;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  
+  --color-chatBackground: #020617;
+  --color-chatMessage: #111827;
+  --color-chatMessageHover: #1f2937;
+  --color-chatMessageDeleted: #291415;
+  --color-chatMessageMention: #bd8700;
+  --color-chatMessageRaid: #1e3a5f;
+  --color-chatMessageFirst: #eab308;
+  --color-chatSystem: #1f2937;
+  
+  --color-buttonPrimary: #9147ff;
+  --color-buttonSecondary: #1f2937;
+  --color-buttonDanger: #7f1d1d;
+  
+  --color-modActive: #166534;
+  --color-modInactive: #1f2933;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* Скроллбар */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surfaceHover);
+}
+
+/* Кнопки */
+button {
+  font-family: inherit;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:active {
+  opacity: 0.8;
+}
+
+/* Инпуты */
+input, select, textarea {
+  font-family: inherit;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
