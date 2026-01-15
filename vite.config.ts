@@ -8,5 +8,9 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: 'dist/renderer',
     emptyOutDir: true
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
   }
 }));

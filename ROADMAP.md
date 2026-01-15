@@ -124,6 +124,45 @@
 
 ---
 
+### ~~2.4 Тестирование~~ ✅
+**Статус:** Выполнено (базовая настройка)
+
+**Что сделано:**
+- ✅ Установлен Vitest и React Testing Library
+- ✅ Создан vitest.config.ts
+- ✅ Создан setup файл для тестов
+- ✅ Написаны unit тесты для chatSystemMessages
+- ✅ Написаны unit тесты для chatStore
+- ✅ Добавлены npm скрипты для запуска тестов
+- ✅ Создана документация TESTING.md
+
+**Результат:**
+- Базовая инфраструктура тестирования готова
+- Примеры тестов для utils и stores
+- Готово к расширению coverage
+
+**Время затрачено:** 1 час
+
+---
+
+### ~~1.1 ErrorBoundary~~ ✅
+**Статус:** Выполнено
+
+**Что сделано:**
+- ✅ Создан компонент ErrorBoundary
+- ✅ Интегрирован в main.tsx
+- ✅ Добавлен UI для отображения ошибок
+- ✅ Кнопка перезагрузки приложения
+
+**Результат:**
+- Приложение не крашится при ошибках в компонентах
+- Пользователь видит понятное сообщение
+- Возможность быстрой перезагрузки
+
+**Время затрачено:** 30 минут
+
+---
+
 ## 🔴 Приоритет 1: Критичные улучшения
 
 ### 1.1 Безопасность SSL ⚠️
@@ -165,9 +204,9 @@ const dimandusAgent = new https.Agent({
 - Риск регрессий при изменениях
 
 **Решение:**
-- [ ] Установить Vitest: `npm install -D vitest @testing-library/react`
-- [ ] Написать unit тесты для utils
-- [ ] Написать integration тесты для stores
+- [x] Установить Vitest: `npm install -D vitest @testing-library/react`
+- [x] Написать unit тесты для utils
+- [x] Написать integration тесты для stores
 - [ ] Добавить E2E тесты (Playwright)
 
 **Структура:**
@@ -175,16 +214,15 @@ const dimandusAgent = new https.Agent({
 src/
 ├── utils/
 │   ├── chatSystemMessages.ts
-│   └── chatSystemMessages.test.ts
+│   └── chatSystemMessages.test.ts ✅
 ├── stores/
 │   ├── chatStore.ts
-│   └── chatStore.test.ts
-└── __tests__/
-    └── e2e/
-        └── chat.spec.ts
+│   └── chatStore.test.ts ✅
+└── test/
+    └── setup.ts ✅
 ```
 
-**Время:** 8-12 часов
+**Время:** 8-12 часов (базовая настройка выполнена за 1 час)
 
 ---
 
