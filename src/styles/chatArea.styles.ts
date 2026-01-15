@@ -73,7 +73,7 @@ export const paneHeaderStyle: React.CSSProperties = {
 
 export const messagesContainerStyle: React.CSSProperties = {
   flex: 1,
-  padding: '8px 18px 8px 8px',
+  padding: 0,
   display: 'flex',
   flexDirection: 'column',
   overflowY: 'auto',

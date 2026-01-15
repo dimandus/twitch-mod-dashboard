@@ -26,7 +26,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           padding: '4px 0',
           borderTop: '1px solid #374151',
           borderBottom: '1px solid #374151',
-          margin: '8px 0',
+          margin: '8px 8px',
           background: 'var(--color-surfaceHover)',
           fontStyle: 'italic'
         }}
@@ -58,6 +58,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           : 'var(--color-chatMessage)',
         borderRadius: 4,
         padding: '2px 4px',
+        margin: '0 8px',
         display: 'flex',
         alignItems: 'baseline',
         gap: 4,
