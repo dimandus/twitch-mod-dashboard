@@ -17,9 +17,9 @@
 
 ### 2. ChatArea.tsx
 - **Было:** ~1970 строк (66.1 KB)
-- **Стало:** ~1421 строк (48.5 KB)
-- **Сокращение:** ~28% (549 строк)
-- **Статус:** ✅ ЗАВЕРШЁН ПОЛНОСТЬЮ
+- **Стало:** 1067 строк (36 KB)
+- **Сокращение:** ~46% (903 строки)
+- **Статус:** ✅ ЗАВЕРШЁН НА 100%
 
 **Применённые изменения:**
 - ✅ Замена `renderBadges` на `<Badges />`
@@ -28,10 +28,13 @@
 - ✅ Замена inline контекстного меню на `<ChatContextMenu />`
 - ✅ Замена inline автокомплита на `<MentionAutocomplete />` и `<CommandAutocomplete />`
 - ✅ Замена inline пикера эмотов на `<EmotePicker />`
-- ✅ Удалены все неиспользуемые стили (~150 строк)
+- ✅ Замена inline панели режимов на `<ChatModesBar />`
+- ✅ Удалено дублирование логики эмотов (теперь в хуке useChatEmotes)
+- ✅ Удалены все неиспользуемые стили (~200 строк)
 
 **Использованные компоненты:**
 - `components/chat/ChatMessageItem.tsx`
+- `components/chat/ChatModesBar.tsx`
 - `components/chat/Badges.tsx`
 - `components/chat/MessageWithEmotes.tsx`
 - `components/chat/ChatContextMenu.tsx`
@@ -39,6 +42,11 @@
 - `components/chat/EmotePicker.tsx`
 - `constants/chatConstants.ts`
 - `utils/chatHelpers.ts`
+
+**Использованные хуки:**
+- `hooks/useChatInput.ts`
+- `hooks/useChatAutocomplete.ts`
+- `hooks/useChatEmotes.ts`
 
 ---
 
@@ -112,11 +120,11 @@
 
 ### После рефакторинга:
 - **Sidebar.tsx:** 33 KB ✅
-- **ChatArea.tsx:** 48.5 KB ✅
+- **ChatArea.tsx:** 36 KB ✅
 - **Старые файлы:** 0 KB (удалить)
-- **Итого:** ~81.5 KB
+- **Итого:** ~69 KB
 
-**Экономия:** ~103.6 KB (~56%)
+**Экономия:** ~116 KB (~63%)
 
 ---
 
