@@ -1,27 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useThemeStore } from '../stores/themeStore';
-import { themes, ThemeName } from '../themes';
-
-// Список необходимых scopes для полной функциональности
-const REQUIRED_SCOPES = [
-  'chat:read',
-  'chat:edit',
-  'moderation:read',
-  'moderator:manage:banned_users',
-  'moderator:manage:chat_messages',
-  'moderator:manage:chat_settings',
-  'moderator:manage:announcements',
-  'moderator:manage:shield_mode',
-  'moderator:read:shield_mode',
-  'moderator:read:chatters',
-  'user:read:moderated_channels',
-  'user:read:follows',
-  'user:write:chat',
-  'user:read:emotes',
-  'moderator:manage:automod',
-  'moderator:read:automod_settings',
-  'moderator:manage:automod_settings'
-];
+import { AuthTab } from '../components/settings/AuthTab';
+import { ParamsTab } from '../components/settings/ParamsTab';
+import { DesignTab } from '../components/settings/DesignTab';
 
 type SettingsTab = 'auth' | 'params' | 'design';
 
@@ -102,16 +83,6 @@ const SettingsView: React.FC = () => {
   // =====================================================
   // Проверка scopes
   // =====================================================
-
-  const missingScopes = REQUIRED_SCOPES.filter(
-    (scope) => !currentScopes.includes(scope)
-  );
-
-  const hasModerationScopes = [
-    'moderator:manage:banned_users',
-    'moderator:manage:chat_messages',
-    'moderator:manage:chat_settings'
-  ].every((s) => currentScopes.includes(s));
 
   // =====================================================
   // Handlers
@@ -250,322 +221,46 @@ const SettingsView: React.FC = () => {
 
       {/* Вкладка: Авторизация */}
       {tab === 'auth' && (
-        <>
-          {/* Twitch API */}
-          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
-            <h3 style={sectionTitleStyle}>🔑 Twitch API</h3>
-            <p style={hintStyle}>
-              Получить ключи можно на{' '}
-              <a
-                href="https://dev.twitch.tv/console/apps"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={linkStyle}
-              >
-                dev.twitch.tv/console/apps
-              </a>
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Client ID:</label>
-                <input
-                  type="text"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  placeholder="Например: abc123xyz..."
-                  style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
-                />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Client Secret:</label>
-                <input
-                  type="password"
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  placeholder="Секретный ключ"
-                  style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
-                />
-              </div>
-
-              <button onClick={saveCreds} style={buttonPrimaryStyle}>
-                💾 Сохранить API ключи
-              </button>
-            </div>
-          </section>
-
-          {/* Twitch аккаунт */}
-          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
-            <h3 style={sectionTitleStyle}>👤 Twitch аккаунт</h3>
-
-            <div style={getStatusBoxStyle(theme.colors.chatBackground, theme.colors.border)}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    background: login ? '#22c55e' : '#ef4444'
-                  }}
-                />
-                <span>
-                  {login ? (
-                    <>
-                      Вход выполнен как <strong>{login}</strong>
-                      {authMode && (
-                        <span style={{ color: '#9ca3af', marginLeft: 8 }}>
-                          ({authMode === 'dimandus' ? 'через Dimandus' : 'прямой OAuth'})
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    'Не залогинен'
-                  )}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              <button
-                onClick={handleLogin}
-                disabled={loadingLogin}
-                style={buttonPrimaryStyle}
-              >
-                {loadingLogin ? '⏳ Ожидаем...' : '🔐 Войти (прямой OAuth)'}
-              </button>
-
-              <button
-                onClick={handleLoginViaDimandus}
-                disabled={loadingLogin}
-                style={buttonSecondaryStyle}
-              >
-                {loadingLogin ? '⏳ Ожидаем...' : '🌐 Войти через Dimandus'}
-              </button>
-
-              {login && (
-                <button onClick={handleLogout} style={buttonDangerStyle}>
-                  🚪 Выйти
-                </button>
-              )}
-            </div>
-          </section>
-
-          {/* Права доступа (Scopes) */}
-          {login && (
-            <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
-              <h3 style={sectionTitleStyle}>🔒 Права доступа (Scopes)</h3>
-
-              {!hasModerationScopes && (
-                <div style={warningBoxStyle}>
-                  <strong>⚠️ Недостаточно прав для модерации!</strong>
-                  <p style={{ margin: '8px 0 0 0' }}>
-                    Для работы функций модерации (бан, таймаут, удаление сообщений, управление режимами чата)
-                    необходимо перелогиниться, чтобы получить новые права.
-                  </p>
-                  <button
-                    onClick={handleLogout}
-                    style={{ ...buttonDangerStyle, marginTop: 8 }}
-                  >
-                    Выйти и войти заново
-                  </button>
-                </div>
-              )}
-
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>
-                  Текущие права ({currentScopes.length}):
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {REQUIRED_SCOPES.map((scope) => {
-                    const hasScope = currentScopes.includes(scope);
-                    return (
-                      <span
-                        key={scope}
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          fontSize: 11,
-                          background: hasScope ? '#166534' : '#7f1d1d',
-                          color: hasScope ? '#bbf7d0' : '#fecaca',
-                          border: `1px solid ${hasScope ? '#22c55e' : '#ef4444'}`
-                        }}
-                      >
-                        {hasScope ? '✓' : '✗'} {scope}
-                      </span>
-                    );
-                  })}
-                </div>
-
-                {missingScopes.length > 0 && (
-                  <div style={{ marginTop: 12, fontSize: 12, color: '#fca5a5' }}>
-                    Отсутствуют: {missingScopes.join(', ')}
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
-
-          {/* Информация */}
-          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
-            <h3 style={sectionTitleStyle}>ℹ️ Информация</h3>
-            <div style={{ fontSize: 13, color: '#9ca3af' }}>
-              <p style={{ margin: '0 0 8px 0' }}>
-                <strong>Прямой OAuth</strong> — требует свои Client ID и Secret. 
-                Полный контроль, но нужно создать приложение на Twitch.
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong>Через Dimandus</strong> — использует общий сервер авторизации. 
-                Быстрый старт без создания приложения.
-              </p>
-            </div>
-          </section>
-        </>
+        <AuthTab
+          clientId={clientId}
+          clientSecret={clientSecret}
+          login={login}
+          authMode={authMode}
+          currentScopes={currentScopes}
+          loadingLogin={loadingLogin}
+          onClientIdChange={setClientId}
+          onClientSecretChange={setClientSecret}
+          onSaveCreds={saveCreds}
+          onLogin={handleLogin}
+          onLoginViaDimandus={handleLoginViaDimandus}
+          onLogout={handleLogout}
+        />
       )}
 
       {/* Вкладка: Параметры */}
       {tab === 'params' && (
-        <>
-          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
-            <h3 style={sectionTitleStyle}>⚙️ Интерфейс чата</h3>
-            <p style={hintStyle}>
-              Настрой границы масштабирования шрифтов и глобального scale для области чатов.
-              Эти значения используются при изменении размеров в Dashboard (кнопки A-/A+, S-/S+).
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <label style={labelStyle}>Минимальный множитель шрифта:</label>
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={fontScaleMin}
-                    onChange={(e) => setFontScaleMin(parseFloat(e.target.value))}
-                    style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <label style={labelStyle}>Максимальный множитель шрифта:</label>
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={fontScaleMax}
-                    onChange={(e) => setFontScaleMax(parseFloat(e.target.value))}
-                    style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <label style={labelStyle}>Минимальный глобальный scale:</label>
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={globalScaleMin}
-                    onChange={(e) => setGlobalScaleMin(parseFloat(e.target.value))}
-                    style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <label style={labelStyle}>Максимальный глобальный scale:</label>
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={globalScaleMax}
-                    onChange={(e) => setGlobalScaleMax(parseFloat(e.target.value))}
-                    style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
-                  />
-                </div>
-              </div>
-
-              <button onClick={saveUiScaleLimits} style={buttonPrimaryStyle}>
-                💾 Сохранить границы масштабирования
-              </button>
-            </div>
-          </section>
-
-          <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
-            <h3 style={sectionTitleStyle}>⌨️ Управление скроллом</h3>
-            <p style={hintStyle}>
-              Выбери клавишу, при зажатии которой наведение курсора на чат будет временно останавливать автоскролл.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Клавиша для паузы скролла при наведении:</label>
-                <select
-                  value={hoverPauseKey}
-                  onChange={(e) => setHoverPauseKey(e.target.value)}
-                  style={getInputStyle(theme.colors.chatBackground, theme.colors.border, theme.colors.text)}
-                >
-                  <option value="Alt">Alt</option>
-                  <option value="Control">Ctrl</option>
-                  <option value="Shift">Shift</option>
-                  <option value="Meta">Meta (Win/Cmd)</option>
-                </select>
-              </div>
-
-              <button onClick={saveHoverPauseKey} style={buttonPrimaryStyle}>
-                💾 Сохранить кнопку
-              </button>
-            </div>
-          </section>
-        </>
+        <ParamsTab
+          fontScaleMin={fontScaleMin}
+          fontScaleMax={fontScaleMax}
+          globalScaleMin={globalScaleMin}
+          globalScaleMax={globalScaleMax}
+          hoverPauseKey={hoverPauseKey}
+          onFontScaleMinChange={setFontScaleMin}
+          onFontScaleMaxChange={setFontScaleMax}
+          onGlobalScaleMinChange={setGlobalScaleMin}
+          onGlobalScaleMaxChange={setGlobalScaleMax}
+          onHoverPauseKeyChange={setHoverPauseKey}
+          onSaveUiScaleLimits={saveUiScaleLimits}
+          onSaveHoverPauseKey={saveHoverPauseKey}
+        />
       )}
 
       {/* Вкладка: Дизайн */}
       {tab === 'design' && (
-        <section style={getSectionStyle(theme.colors.surface, theme.colors.border)}>
-          <h3 style={sectionTitleStyle}>🎨 Тема оформления</h3>
-          <p style={hintStyle}>
-            Выбери тему, которая тебе нравится. Изменения применяются мгновенно.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
-            {(Object.keys(themes) as ThemeName[]).map((themeName) => {
-              const theme = themes[themeName];
-              const isActive = currentTheme === themeName;
-              
-              return (
-                <button
-                  key={themeName}
-                  onClick={() => setTheme(themeName)}
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    border: `2px solid ${isActive ? theme.colors.primary : theme.colors.border}`,
-                    background: theme.colors.surface,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600, color: theme.colors.text }}>
-                    {theme.name}
-                  </div>
-                  
-                  {/* Превью цветов */}
-                  <div style={{ display: 'flex', gap: 4, height: 24 }}>
-                    <div style={{ flex: 1, background: theme.colors.background, borderRadius: 4 }} />
-                    <div style={{ flex: 1, background: theme.colors.primary, borderRadius: 4 }} />
-                    <div style={{ flex: 1, background: theme.colors.success, borderRadius: 4 }} />
-                  </div>
-                  
-                  {isActive && (
-                    <div style={{ fontSize: 11, color: theme.colors.primary, fontWeight: 600 }}>
-                      ✓ Активна
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </section>
+        <DesignTab
+          currentTheme={currentTheme}
+          onThemeChange={setTheme}
+        />
       )}
 
       {/* Сообщение */}
@@ -592,12 +287,6 @@ const SettingsView: React.FC = () => {
 // Styles
 // =====================================================
 
-const containerStyle: React.CSSProperties = {
-  padding: 24,
-  maxWidth: 700,
-  color: '#e5e7eb'
-};
-
 const getContainerStyle = (textColor: string): React.CSSProperties => ({
   padding: 24,
   maxWidth: 700,
@@ -610,94 +299,7 @@ const tabsContainerStyle: React.CSSProperties = {
   marginBottom: 16
 };
 
-const getSectionStyle = (surface: string, border: string): React.CSSProperties => ({
-  marginBottom: 24,
-  padding: 16,
-  background: surface,
-  borderRadius: 8,
-  border: `1px solid ${border}`
-});
 
-const sectionTitleStyle: React.CSSProperties = {
-  margin: '0 0 12px 0',
-  fontSize: 16,
-  fontWeight: 600
-};
-
-const hintStyle: React.CSSProperties = {
-  margin: '0 0 12px 0',
-  fontSize: 12,
-  color: '#9ca3af'
-};
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 13,
-  color: '#9ca3af',
-  marginBottom: 4
-};
-
-const getInputStyle = (bg: string, border: string, text: string): React.CSSProperties => ({
-  width: '100%',
-  padding: '8px 10px',
-  borderRadius: 6,
-  border: `1px solid ${border}`,
-  background: bg,
-  color: text,
-  fontSize: 13
-});
-
-const linkStyle: React.CSSProperties = {
-  color: '#60a5fa',
-  textDecoration: 'underline'
-};
-
-const buttonPrimaryStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: 6,
-  border: 'none',
-  background: 'var(--color-primary)',
-  color: '#fff',
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: 'pointer'
-};
-
-const buttonSecondaryStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: 6,
-  border: '1px solid var(--color-border)',
-  background: 'var(--color-buttonSecondary)',
-  color: 'var(--color-text)',
-  fontSize: 13,
-  cursor: 'pointer'
-};
-
-const buttonDangerStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: 6,
-  border: '1px solid var(--color-error)',
-  background: 'transparent',
-  color: 'var(--color-error)',
-  fontSize: 13,
-  cursor: 'pointer'
-};
-
-const getStatusBoxStyle = (bg: string, border: string): React.CSSProperties => ({
-  padding: '10px 12px',
-  background: bg,
-  borderRadius: 6,
-  border: `1px solid ${border}`
-});
-
-const warningBoxStyle: React.CSSProperties = {
-  padding: 12,
-  background: '#7f1d1d33',
-  borderRadius: 6,
-  border: '1px solid var(--color-error)',
-  color: '#fecaca',
-  fontSize: 13
-};
 
 const messageStyle: React.CSSProperties = {
   position: 'fixed',

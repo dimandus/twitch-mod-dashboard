@@ -1,33 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { ActiveChatter } from '../App';
+import { KNOWN_BOTS, roleOrder } from '../constants/sidebarConstants';
+import { fetchChattersForChannel, ViewerEntry } from '../utils/viewersHelpers';
+import { ChannelList } from '../components/sidebar/ChannelList';
+import { ViewersList } from '../components/sidebar/ViewersList';
+import { AddChannelModal } from '../components/sidebar/AddChannelModal';
 
 // =====================================================
 // Типы
 // =====================================================
-
-type ViewerRole =
-  | 'broadcaster'
-  | 'moderator'
-  | 'vip'
-  | 'staff'
-  | 'admin'
-  | 'global_mod'
-  | 'viewer';
-
-interface ViewerEntry {
-  odaterId?: string;
-  login: string;
-  role: ViewerRole;
-  isBot: boolean;
-  avatarUrl?: string | null;
-  displayName?: string | null;
-  bannerUrl?: string | null;
-  badges?: string[];
-  badgeVersions?: Record<string, string>;
-  badgeInfo?: Record<string, string>;
-  lastSeen?: number;
-  isFromFallback?: boolean;
-}
 
 interface ChannelStatus {
   login: string;
@@ -42,29 +23,6 @@ interface Toast {
   text: string;
   type?: 'info' | 'success' | 'error';
 }
-
-const KNOWN_BOTS = new Set([
-  'nightbot',
-  'moobot',
-  'streamelements',
-  'fossabot',
-  'deepbot',
-  'phantombot',
-  'streamlabs',
-  'stay_hydrated_bot',
-  'commanderroot',
-  'wizebot'
-]);
-
-const roleOrder: ViewerRole[] = [
-  'broadcaster',
-  'moderator',
-  'vip',
-  'staff',
-  'admin',
-  'global_mod',
-  'viewer'
-];
 
 type ChannelFilter = 'all' | 'mod';
 
@@ -721,108 +679,15 @@ if (selectedChannel) {
               </div>
 
               <div style={scrollListStyle}>
-                {channels.length === 0 && (
-                  <div
-                    style={{
-                      color: '#6b7280',
-                      fontSize: 12 * textScale,
-                      padding: '8px 4px'
-                    }}
-                  >
-                    Нет каналов. Нажми +, M или ♥
-                  </div>
-                )}
-
-                {sortedChannels.map((ch) => {
-                  const st =
-                    channelStatus[ch.toLowerCase()] ||
-                    ({} as ChannelStatus);
-                  const dotColor =
-                    st.isLive === undefined
-                      ? '#4b5563'
-                      : st.isLive
-                      ? 'var(--color-success)'
-                      : '#ef4444';
-                  return (
-                    <button
-                      key={ch}
-                      style={{
-                        ...channelButtonStyle(
-                          selectedChannel === ch
-                        ),
-                        fontSize: 13 * textScale
-                      }}
-                      onClick={() => handleSelectChannel(ch)}
-                      onContextMenu={(e) =>
-                        handleChannelContextMenu(e, ch)
-                      }
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(
-                          'text/channel-login',
-                          ch
-                        );
-                        e.dataTransfer.effectAllowed = 'copy';
-                      }}
-                      draggable
-                      title={
-                        st.isLive
-                          ? `${ch} онлайн: ${
-                              st.title || ''
-                            }`
-                          : `${ch} оффлайн`
-                      }
-                    >
-                      <span
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          width: '100%'
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '999px',
-                            background: dotColor,
-                            flexShrink: 0
-                          }}
-                        />
-                        <span
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }}
-                        >
-                          {ch}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 11 * textScale,
-                            color: 'var(--color-textSecondary)',
-                            marginLeft: 'auto',
-                            flexShrink: 0
-                          }}
-                        >
-                          ({st.viewerCount ?? 0}/
-                          {st.modCount ?? '?'})
-                        </span>
-                        <span
-                          style={channelRemoveButtonStyle}
-                          title="Удалить канал из списка"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            void removeChannel(ch);
-                          }}
-                        >
-                          ✕
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
+                <ChannelList
+                  channels={sortedChannels}
+                  selectedChannel={selectedChannel}
+                  channelStatus={channelStatus}
+                  onChannelSelect={handleSelectChannel}
+                  onChannelRemove={removeChannel}
+                  onChannelContextMenu={handleChannelContextMenu}
+                  textScale={textScale}
+                />
                 {importError && (
                   <div
                     style={{
@@ -928,159 +793,12 @@ if (selectedChannel) {
                   !viewersLoading &&
                   !viewersError &&
                   viewers.length > 0 && (
-                    <div>
-                      {(() => {
-                        const now = Date.now();
-                        const maxAgeMs = 5 * 60 * 1000;
-
-                        return viewers.map((v) => {
-                          const hasModBadge =
-                            (v.badges || []).some(
-                              (b) =>
-                                b.toLowerCase().startsWith('broadcaster') ||
-                                b.toLowerCase().startsWith('moderator')
-                            );
-
-                          const isModOrBroadcastor =
-                            v.role === 'broadcaster' ||
-                            v.role === 'moderator' ||
-                            hasModBadge;
-
-                          const roleBgStyle = isModOrBroadcastor
-                            ? {
-                                backgroundColor: 'rgba(0,0,0,0.4)',
-                                borderLeft: '3px solid var(--color-primary)'
-                              }
-                            : {};
-
-                          const bannerStyle: React.CSSProperties = v.bannerUrl
-                            ? {
-                                backgroundImage: `url(${v.bannerUrl})`,
-                                backgroundPosition: 'center top',
-                                backgroundSize: 'cover',
-                                backgroundRepeat: 'no-repeat'
-                              }
-                            : {};
-
-                          let activityDot: React.ReactNode = null;
-                          if (
-                            v.isFromFallback &&
-                            typeof v.lastSeen === 'number'
-                          ) {
-                            const ageMs = now - v.lastSeen;
-                            const clampedAge = Math.min(
-                              Math.max(ageMs, 0),
-                              maxAgeMs
-                            );
-                            const ratio = clampedAge / maxAgeMs;
-                            const progress = 1 - ratio;
-
-                            activityDot = (
-                              <div
-                                style={activityDotStyle(progress)}
-                                title={`Активность: ${
-                                  Math.round(progress * 100)
-                                }% (последнее сообщение ≈ ${
-                                  Math.max(
-                                    0,
-                                    Math.round(ageMs / 60000)
-                                  ) || 0
-                                } мин назад)`}
-                              />
-                            );
-                          }
-
-                          return (
-                            <div
-                              key={v.login + v.role}
-                              onContextMenu={(e) =>
-                                handleViewerContextMenu(e, v)
-                              }
-                              style={{
-                                ...viewerItemStyle,
-                                ...bannerStyle,
-                                ...roleBgStyle,
-                                cursor: 'context-menu'
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  width: '100%'
-                                }}
-                              >
-                                {activityDot}
-                                {v.avatarUrl && (
-                                  <img
-                                    src={v.avatarUrl}
-                                    alt={v.login}
-                                    style={{
-                                      width: 20,
-                                      height: 20,
-                                      borderRadius: '50%',
-                                      flexShrink: 0
-                                    }}
-                                  />
-                                )}
-
-                                {/* Bot бейдж, если нужно явно подсветить */}
-                                {v.isBot && (
-                                  <span
-                                    title="Bot"
-                                    style={{
-                                      minWidth: 14,
-                                      height: 14,
-                                      borderRadius: 4,
-                                      fontSize: 9 * textScale,
-                                      lineHeight: '14px',
-                                      textAlign: 'center',
-                                      background: '#eab308',
-                                      color: '#020617',
-                                      fontWeight: 700,
-                                      padding: '0 2px'
-                                    }}
-                                  >
-                                    B
-                                  </span>
-                                )}
-
-                                {/* Бейджи как в чате */}
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 2
-                                  }}
-                                >
-                                  {renderBadges(
-                                    v.badges || [],
-                                    v.badgeVersions,
-                                    v.badgeInfo,
-                                    badgeSets
-                                  )}
-                                </div>
-
-                                <span
-                                  style={{
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    fontWeight: isModOrBroadcastor
-                                      ? 'bold'
-                                      : 'normal',
-                                    fontSize: 12 * textScale
-                                  }}
-                                >
-                                  {v.displayName || v.login}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
+                    <ViewersList
+                      viewers={viewers}
+                      badgeSets={badgeSets}
+                      onViewerContextMenu={handleViewerContextMenu}
+                      textScale={textScale}
+                    />
                   )}
               </div>
             </div>
@@ -1088,82 +806,15 @@ if (selectedChannel) {
         )}
       </aside>
 
-      {/* Модалка добавления канала */}
-      {isAddChannelOpen && (
-        <div
-          style={modalOverlayStyle}
-          onClick={() => setIsAddChannelOpen(false)}
-        >
-          <div
-            style={modalContentStyle}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3
-              style={{
-                marginTop: 0,
-                marginBottom: 8,
-                fontSize: 16 * textScale
-              }}
-            >
-              Добавить канал
-            </h3>
-            <input
-              type="text"
-              value={newChannelName}
-              onChange={(e) =>
-                setNewChannelName(e.target.value)
-              }
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddChannel();
-              }}
-              placeholder="Логин канала"
-              style={{
-                ...inputStyle,
-                fontSize: 13 * textScale
-              }}
-              autoFocus
-            />
-            {addChannelError && (
-              <div
-                style={{
-                  color: '#fecaca',
-                  fontSize: 12 * textScale,
-                  marginTop: 4
-                }}
-              >
-                {addChannelError}
-              </div>
-            )}
-            <div
-              style={{
-                marginTop: 12,
-                display: 'flex',
-                justifyContent: 'flex-end',
-                gap: 8
-              }}
-            >
-              <button
-                onClick={() => setIsAddChannelOpen(false)}
-                style={{
-                  ...buttonSecondaryStyle,
-                  fontSize: 13 * textScale
-                }}
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleAddChannel}
-                style={{
-                  ...buttonPrimaryStyle,
-                  fontSize: 13 * textScale
-                }}
-              >
-                Добавить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AddChannelModal
+        isOpen={isAddChannelOpen}
+        channelName={newChannelName}
+        error={addChannelError}
+        onChannelNameChange={setNewChannelName}
+        onAdd={handleAddChannel}
+        onClose={() => setIsAddChannelOpen(false)}
+        textScale={textScale}
+      />
 
       {/* Контекстное меню каналов */}
       {channelContextMenu.visible &&
@@ -1326,24 +977,8 @@ if (selectedChannel) {
 };
 
 // =====================================================
-// Styles & helpers (в том числе рендер бейджей)
+// Styles
 // =====================================================
-
-const activityDotStyle = (progress: number): React.CSSProperties => {
-  const clamped = Math.min(Math.max(progress, 0), 1);
-  const angle = clamped * 360;
-  return {
-    width: 10,
-    height: 10,
-    borderRadius: '50%',
-    border: '1px solid #4b5563',
-    background:
-      clamped <= 0
-        ? 'var(--color-surface)'
-        : `conic-gradient(var(--color-success) ${angle}deg, var(--color-surface) ${angle}deg)`,
-    flexShrink: 0
-  };
-};
 
 const sidebarStyle = (collapsed: boolean): React.CSSProperties => ({
   display: 'flex',
@@ -1422,35 +1057,7 @@ const iconButtonStyle: React.CSSProperties = {
   justifyContent: 'center'
 };
 
-const channelButtonStyle = (
-  active: boolean
-): React.CSSProperties => ({
-  width: '100%',
-  textAlign: 'left',
-  padding: '4px 6px',
-  marginBottom: 4,
-  borderRadius: 6,
-  border: 'none',
-  background: active ? '#4b5563' : 'transparent',
-  color: 'var(--color-text)',
-  fontSize: 13,
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
-  textOverflow: 'ellipsis',
-  overflow: 'hidden'
-});
 
-const channelRemoveButtonStyle: React.CSSProperties = {
-  marginLeft: 4,
-  padding: '0 4px',
-  borderRadius: 4,
-  fontSize: 11,
-  color: 'var(--color-textSecondary)',
-  border: 'none',
-  background: 'transparent',
-  cursor: 'pointer',
-  flexShrink: 0
-};
 
 const channelFilterButtonStyle = (
   active: boolean
@@ -1464,62 +1071,7 @@ const channelFilterButtonStyle = (
   cursor: 'pointer'
 });
 
-const viewerItemStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '4px 6px',
-  borderRadius: 6,
-  marginBottom: 2
-};
 
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1500
-};
-
-const modalContentStyle: React.CSSProperties = {
-  background: 'var(--color-surface)',
-  padding: '16px 20px',
-  borderRadius: 8,
-  width: 320,
-  boxShadow: '0 10px 25px rgba(0,0,0,0.7)'
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '6px 8px',
-  borderRadius: 6,
-  border: '1px solid #374151',
-  background: '#020617',
-  color: 'var(--color-text)',
-  fontSize: 13
-};
-
-const buttonSecondaryStyle: React.CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 6,
-  border: '1px solid #4b5563',
-  background: '#1f2933',
-  color: 'var(--color-text)',
-  fontSize: 13,
-  cursor: 'pointer'
-};
-
-const buttonPrimaryStyle: React.CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 6,
-  border: 'none',
-  background: 'var(--color-primary)',
-  color: '#fff',
-  fontSize: 13,
-  cursor: 'pointer'
-};
 
 const contextMenuStyle = (
   x: number,
@@ -1582,231 +1134,6 @@ const toastStyle: React.CSSProperties = {
   color: 'var(--color-text)',
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
 };
-
-// ====== рендер бейджей — как в ChatArea ======
-
-function badgeTitle(setId: string, months?: string): string {
-  switch (setId) {
-    case 'broadcaster':
-      return 'Стример';
-    case 'moderator':
-      return 'Модератор';
-    case 'vip':
-      return 'VIP';
-    case 'subscriber':
-      return months ? `Подписчик (${months} мес.)` : 'Подписчик';
-    case 'staff':
-      return 'Twitch Staff';
-    case 'admin':
-      return 'Twitch Admin';
-    case 'global_mod':
-      return 'Global Moderator';
-    default:
-      return setId;
-  }
-}
-
-function renderBadges(
-  badges: string[],
-  badgeVersions?: Record<string, string>,
-  badgeInfo?: Record<string, string>,
-  badgeSets?: Record<string, Record<string, any>>
-): React.ReactNode {
-  if (!badges.length) return null;
-
-  // 1) Если badgeSets есть (Helix отдал глобальные бейджи) — рисуем картинки
-  if (badgeSets && Object.keys(badgeSets).length > 0) {
-    return badges.map((setId, i) => {
-      const set = badgeSets[setId];
-      if (!set) return null;
-
-      const versionId = badgeVersions?.[setId] || '1';
-      const verData = set[versionId] || Object.values(set)[0];
-
-      if (!verData) return null;
-
-      const url =
-        verData.image_url_1x ||
-        verData.image_url_2x ||
-        verData.image_url_4x;
-      if (!url) return null;
-
-      const months = badgeInfo?.[setId];
-      const title =
-        verData.title || badgeTitle(setId, months);
-
-      return (
-        <img
-          key={setId + i}
-          src={url}
-          alt={setId}
-          title={title}
-          style={{
-            width: 16,
-            height: 16,
-            marginRight: 2,
-            flexShrink: 0
-          }}
-        />
-      );
-    });
-  }
-
-  // 2) Фолбэк: текстовые бейджи
-  const mapping: Record<string, { label: string; color: string }> = {
-    broadcaster: { label: 'S', color: '#a855f7' },
-    moderator: { label: 'M', color: 'var(--color-success)' },
-    vip: { label: 'V', color: '#0ea5e9' },
-    subscriber: { label: 'Sub', color: '#f97316' },
-    staff: { label: 'T', color: '#f97316' },
-    admin: { label: 'T', color: '#f97316' },
-    global_mod: { label: 'T', color: '#f97316' }
-  };
-
-  return badges.map((setId, i) => {
-    const info = mapping[setId];
-    if (!info) return null;
-
-    const months = badgeInfo?.[setId];
-    const title = badgeTitle(setId, months);
-
-    return (
-      <span
-        key={setId + i}
-        title={title}
-        style={{
-          minWidth: 14,
-          height: 14,
-          borderRadius: 4,
-          fontSize: 9,
-          lineHeight: '14px',
-          textAlign: 'center',
-          background: info.color,
-          color: '#020617',
-          fontWeight: 700,
-          padding: '0 2px',
-          marginRight: 2,
-          flexShrink: 0
-        }}
-      >
-        {info.label}
-      </span>
-    );
-  });
-}
-
-async function fetchChattersForChannel(
-  channelLogin: string,
-  fallbackChatters?: Map<string, ActiveChatter>
-): Promise<{ viewers: ViewerEntry[]; fallback: boolean }> {
-  const login = channelLogin.toLowerCase().trim();
-  if (!login) return { viewers: [], fallback: false };
-
-  let helixViewers: ViewerEntry[] | null = null;
-
-  try {
-    const result =
-      await window.electronAPI.twitch.getChannelChatters(login);
-
-    if (result && Array.isArray(result.chatters)) {
-      const { broadcasterId, moderatorIds, chatters } = result;
-      const modsSet = new Set(moderatorIds);
-
-      let viewers: ViewerEntry[] = chatters.map((c: any) => {
-        let role: ViewerRole = 'viewer';
-        if (c.user_id === broadcasterId) role = 'broadcaster';
-        else if (modsSet.has(c.user_id)) role = 'moderator';
-
-        return {
-          odaterId: c.user_id,
-          login: c.user_login,
-          role,
-          isBot: KNOWN_BOTS.has(c.user_login.toLowerCase()),
-          isFromFallback: false
-        };
-      });
-
-      viewers.sort((a, b) => {
-        const aIdx = roleOrder.indexOf(a.role);
-        const bIdx = roleOrder.indexOf(b.role);
-        if (aIdx !== bIdx) return aIdx - bIdx;
-        return a.login.localeCompare(b.login);
-      });
-
-      // (опционально) подцепляем avatar/banner
-      try {
-        const logins = viewers.map((v) => v.login);
-        const infos =
-          await window.electronAPI.twitch.getUsersInfo(logins);
-        const infoMap = new Map(
-          infos.map((i: any) => [i.login.toLowerCase(), i])
-        );
-        viewers = viewers.map((v) => {
-          const info = infoMap.get(v.login.toLowerCase());
-          return {
-            ...v,
-            avatarUrl: info?.avatarUrl || null,
-            displayName: info?.displayName || v.login,
-            bannerUrl: info?.bannerUrl || null
-          };
-        });
-      } catch {}
-
-      if (viewers.length > 0) {
-        helixViewers = viewers;
-      }
-    }
-  } catch (err: any) {
-    console.warn('[fetchChatters] Helix error:', err);
-  }
-
-  if (helixViewers) {
-    return { viewers: helixViewers, fallback: false };
-  }
-
-  if (fallbackChatters && fallbackChatters.size > 0) {
-    const now = Date.now();
-
-    const viewers: ViewerEntry[] = Array.from(
-      fallbackChatters.values()
-    ).map((c: ActiveChatter) => {
-      let role: ViewerRole = 'viewer';
-      const badgeIds = (c.badges || []).map((b) =>
-        b.toLowerCase()
-      );
-      if (badgeIds.some((b) => b.startsWith('broadcaster'))) role = 'broadcaster';
-      else if (badgeIds.some((b) => b.startsWith('moderator'))) role = 'moderator';
-      else if (badgeIds.some((b) => b.startsWith('vip'))) role = 'vip';
-
-      return {
-        odaterId: c.odaterId,
-        login: c.login,
-        role,
-        isBot: KNOWN_BOTS.has(c.login.toLowerCase()),
-        displayName: c.displayName,
-        avatarUrl: c.avatarUrl ?? null,
-        bannerUrl: c.bannerUrl ?? null,
-        badges: c.badges || [],
-        badgeVersions: c.badgeVersions,
-        badgeInfo: c.badgeInfo,
-        lastSeen:
-          typeof c.lastSeen === 'number' ? c.lastSeen : now,
-        isFromFallback: true
-      };
-    });
-
-    viewers.sort((a, b) => {
-      const aIdx = roleOrder.indexOf(a.role);
-      const bIdx = roleOrder.indexOf(b.role);
-      if (aIdx !== bIdx) return aIdx - bIdx;
-      return a.login.localeCompare(b.login);
-    });
-
-    return { viewers, fallback: true };
-  }
-
-  return { viewers: [], fallback: false };
-}
 
 function clampAutoScale(value: number): number {
   const min = 0.7;

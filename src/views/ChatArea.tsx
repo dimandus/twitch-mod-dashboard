@@ -1,5 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
+import { TWITCH_COMMANDS, SLOW_MODE_OPTIONS, FOLLOWERS_MODE_OPTIONS } from '../constants/chatConstants';
+import { clampWidth, clampHeight, clampAutoScale, formatFollowersDuration, buildEmoteUrls } from '../utils/chatHelpers';
+import { ChatMessageItem } from '../components/chat/ChatMessageItem';
+import { ChatModesBar } from '../components/chat/ChatModesBar';
+import { EmotePicker, Emote, EmoteSource } from '../components/chat/EmotePicker';
+import { MentionAutocomplete, CommandAutocomplete } from '../components/chat/Autocomplete';
+import { ChatContextMenu } from '../components/chat/ChatContextMenu';
+import { Badges } from '../components/chat/Badges';
+import { MessageWithEmotes } from '../components/chat/MessageWithEmotes';
+import { logger } from '../utils/logger';
+import { useChatInput } from '../hooks/useChatInput';
+import { useChatAutocomplete } from '../hooks/useChatAutocomplete';
+import { useChatEmotes } from '../hooks/useChatEmotes';
 
 // =====================================================
 // Типы
@@ -75,46 +88,7 @@ const defaultModes: ChatModes = {
   shield: false
 };
 
-const SLOW_MODE_OPTIONS = [
-  { label: 'Выкл', value: 0 },
-  { label: '3с', value: 3 },
-  { label: '5с', value: 5 },
-  { label: '10с', value: 10 },
-  { label: '20с', value: 20 },
-  { label: '30с', value: 30 },
-  { label: '60с', value: 60 },
-  { label: '120с', value: 120 }
-];
 
-const FOLLOWERS_MODE_OPTIONS = [
-  { label: 'Выкл', value: -1 },
-  { label: '0м', value: 0 },
-  { label: '10м', value: 10 },
-  { label: '30м', value: 30 },
-  { label: '1ч', value: 60 },
-  { label: '1д', value: 1440 },
-  { label: '1н', value: 10080 },
-  { label: '1мес', value: 43200 }
-];
-
-const TWITCH_COMMANDS = [
-  { name: '/me', desc: 'Цветной текст' },
-  { name: '/clear', desc: 'Очистить чат' },
-  { name: '/slow', desc: 'Включить slowmode' },
-  { name: '/slowoff', desc: 'Выключить slowmode' },
-  { name: '/followers', desc: 'Только для фолловеров' },
-  { name: '/followersoff', desc: 'Отключить только для фолловеров' },
-  { name: '/subscribers', desc: 'Только для подписчиков' },
-  { name: '/subscribersoff', desc: 'Отключить только для подписчиков' },
-  { name: '/emoteonly', desc: 'Только эмодзи' },
-  { name: '/emoteonlyoff', desc: 'Отключить только эмодзи' },
-  { name: '/ban', desc: 'Бан пользователя' },
-  { name: '/timeout', desc: 'Таймаут пользователя' },
-  { name: '/unban', desc: 'Разбан пользователя' },
-  { name: '/announce', desc: 'Объявление' },
-  { name: '/uniquechat', desc: 'Уникальные сообщения' },
-  { name: '/uniquechatoff', desc: 'Отключить уникальные сообщения' }
-];
 
 interface ChatAreaProps {
   selectedChannel: string | null;
@@ -138,17 +112,7 @@ interface ChatAreaProps {
   onSelectChannel: (channel: string) => void;
 }
 
-type EmoteSource = 'global' | 'user' | 'channel';
 
-interface Emote {
-  id: string;
-  name: string;
-  url1x: string;
-  url2x: string;
-  url4x: string;
-  source: EmoteSource;
-  ownerName?: string;
-}
 
 // =====================================================
 // Компонент
@@ -174,7 +138,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   onGlobalScaleChange,
   onSelectChannel
 }) => {
-  const [inputValues, setInputValues] = useState<Record<string, string>>({});
+  // Хуки для управления состоянием
+  const chatInput = useChatInput();
+  const chatAutocomplete = useChatAutocomplete(chatPanes);
+  const chatEmotes = useChatEmotes(chatPanes);
+
+  // Оставшиеся локальные состояния
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [isDropActive, setIsDropActive] = useState(false);
   const [rows, setRows] = useState<1 | 2>(1);
@@ -187,15 +156,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [hoverPauseKey, setHoverPauseKey] = useState('Alt');
 
   const scrollContainersRef = useRef<Record<string, HTMLDivElement | null>>({});
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  const [mentionState, setMentionState] = useState<{
-    paneId: string;
-    query: string;
-    suggestions: string[];
-    selectedIndex: number;
-    atIndex: number;
-  } | null>(null);
 
   const [msgMenu, setMsgMenu] = useState<{
     x: number;
@@ -211,28 +171,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const [badgeSets, setBadgeSets] = useState<Record<string, Record<string, any>>>({});
 
-const [commandState, setCommandState] = useState<{
-  paneId: string;
-  query: string;
-  suggestions: typeof TWITCH_COMMANDS;
-  selectedIndex: number;
-  slashIndex: number;
-} | null>(null);
-
-  // масштабирование
   const [autoScale, setAutoScale] = useState(1);
-
-  // Эмоты
-  const [globalEmotes, setGlobalEmotes] = useState<Emote[]>([]);
-  const [userEmotes, setUserEmotes] = useState<Emote[]>([]);
-  const [channelEmotes, setChannelEmotes] = useState<Record<string, Emote[]>>({});
-  const [emotePicker, setEmotePicker] = useState<{
-    paneId: string;
-    tab: EmoteSource;
-  } | null>(null);
-
-  // Использование эмотов
-  const [emoteUsage, setEmoteUsage] = useState<Record<string, number>>({});
 
   // Загрузка клавиши для паузы скролла
   useEffect(() => {
@@ -330,39 +269,7 @@ const [commandState, setCommandState] = useState<{
     })();
   }, [rows, paneWidth, paneHeight]);
 
-  // Загрузка статистики по эмотам
-  useEffect(() => {
-    (async () => {
-      try {
-        const stored = await window.electronAPI.config.get('ui.chat.emoteUsage');
-        if (stored && typeof stored === 'object') {
-          setEmoteUsage(stored as Record<string, number>);
-        }
-      } catch (err) {
-        console.warn('[ChatArea] не удалось загрузить статистику смайлов', err);
-      }
-    })();
-  }, []);
-
-  // Сохранение статистики по эмотам
-  useEffect(() => {
-    (async () => {
-      try {
-        await window.electronAPI.config.set('ui.chat.emoteUsage', emoteUsage);
-      } catch (err) {
-        console.warn('[ChatArea] не удалось сохранить статистику смайлов', err);
-      }
-    })();
-  }, [emoteUsage]);
-
-  const incrementEmoteUsage = (code: string) => {
-    setEmoteUsage((prev) => {
-      const next = { ...prev, [code]: (prev[code] || 0) + 1 };
-      return next;
-    });
-  };
-
-  // Клик вне — закрывать меню/дропдауны
+    // Клик вне — закрывать меню/дропдауны
   useEffect(() => {
     const handleClick = () => {
       setOpenDropdown(null);
@@ -535,151 +442,48 @@ const [commandState, setCommandState] = useState<{
   const handlePaneDragEnd = () => setDraggingId(null);
 
   // Input
-  const handleInputChange = (id: string, value: string) => {
-    setInputValues((p) => ({ ...p, [id]: value }));
-    updateMentionSuggestions(id, value);
-	updateCommandSuggestions(id, value);
+    const handleInputChange = (id: string, value: string) => {
+    chatInput.handleInputChange(id, value);
+    chatAutocomplete.updateMentionSuggestions(id, value);
+    chatAutocomplete.updateCommandSuggestions(id, value);
   };
 
   const handleSend = (pane: ChatPane) => {
-    const text = (inputValues[pane.id] || '').trim();
+    const text = chatInput.getInputValue(pane.id).trim();
     if (!pane.channel || !text) return;
     onSendMessage(pane.channel, text);
-    setInputValues((p) => ({ ...p, [pane.id]: '' }));
-    setMentionState((prev) => (prev?.paneId === pane.id ? null : prev));
+    chatInput.clearInput(pane.id);
+    chatAutocomplete.clearMentionState();
   };
 
-const updateCommandSuggestions = (paneId: string, value: string) => {
-  const slashIndex = value.indexOf('/');
-  if (slashIndex !== 0) {
-    setCommandState(null);
-    return;
-  }
-
-  // Если после команды уже есть пробел и что-то ещё — не показываем подсказку
-  const firstSpace = value.indexOf(' ');
-  if (firstSpace > 0) {
-    setCommandState(null);
-    return;
-  }
-
-  const query = value.slice(1).toLowerCase();
-  const suggestions = TWITCH_COMMANDS.filter((cmd) =>
-    cmd.name.slice(1).startsWith(query)
-  );
-
-  if (suggestions.length === 0) {
-    setCommandState(null);
-    return;
-  }
-
-  setCommandState({
-    paneId,
-    query,
-    suggestions,
-    selectedIndex: 0,
-    slashIndex
-  });
-};
-
-  const updateMentionSuggestions = (paneId: string, value: string) => {
-    const atIndex = value.lastIndexOf('@');
-    if (atIndex === -1) {
-      setMentionState(null);
-      return;
-    }
-
-    if (atIndex > 0 && !/\s/.test(value[atIndex - 1])) {
-      setMentionState(null);
-      return;
-    }
-
-    const after = value.slice(atIndex + 1);
-    if (after.includes(' ')) {
-      setMentionState(null);
-      return;
-    }
-
-    const query = after.toLowerCase();
-    const pane = chatPanes.find((p) => p.id === paneId);
-    if (!pane) {
-      setMentionState(null);
-      return;
-    }
-
-    const namesSet = new Set<string>();
-    pane.messages.forEach((m) => {
-      if (!m.userLogin) return;
-      const name = m.displayName || m.userLogin;
-      namesSet.add(name);
-    });
-
-    const allNames = Array.from(namesSet);
-    const suggestions = allNames
-      .filter((name) => name.toLowerCase().startsWith(query))
-      .sort();
-
-    if (suggestions.length === 0) {
-      setMentionState(null);
-      return;
-    }
-
-    setMentionState({
-      paneId,
-      query,
-      suggestions,
-      selectedIndex: 0,
-      atIndex
+    const applyMentionSuggestion = (paneId: string) => {
+    const inputValue = chatInput.getInputValue(paneId);
+    chatAutocomplete.applyMentionSuggestion(paneId, inputValue, (newValue) => {
+      chatInput.handleInputChange(paneId, newValue);
     });
   };
 
-  const applyMentionSuggestion = (paneId: string) => {
-    setMentionState((prev) => {
-      if (!prev || prev.paneId !== paneId) return prev;
-      const { atIndex, suggestions, selectedIndex } = prev;
-      const name = suggestions[selectedIndex];
-      const current = inputValues[paneId] || '';
-
-      const before = current.slice(0, atIndex);
-      const newValue = before + '@' + name + ' ';
-
-      setInputValues((p) => ({ ...p, [paneId]: newValue }));
-
-      return null;
+  const applyCommandSuggestion = (paneId: string) => {
+    chatAutocomplete.applyCommandSuggestion(paneId, (newValue) => {
+      chatInput.handleInputChange(paneId, newValue);
     });
   };
 
-  const handleInputKeyDown = (
+    const handleInputKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement>,
     pane: ChatPane
   ) => {
+    const { mentionState, commandState } = chatAutocomplete;
+    
     if (mentionState && mentionState.paneId === pane.id) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setMentionState((prev) =>
-          !prev
-            ? null
-            : {
-                ...prev,
-                selectedIndex:
-                  (prev.selectedIndex + 1) %
-                  prev.suggestions.length
-              }
-        );
+        chatAutocomplete.moveMentionSelection('down');
         return;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setMentionState((prev) =>
-          !prev
-            ? null
-            : {
-                ...prev,
-                selectedIndex:
-                  (prev.selectedIndex - 1 + prev.suggestions.length) %
-                  prev.suggestions.length
-              }
-        );
+        chatAutocomplete.moveMentionSelection('up');
         return;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
@@ -689,51 +493,33 @@ const updateCommandSuggestions = (paneId: string, value: string) => {
       }
       if (e.key === 'Escape') {
         e.preventDefault();
-        setMentionState(null);
+        chatAutocomplete.clearMentionState();
         return;
       }
     }
 
-  if (commandState && commandState.paneId === pane.id) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setCommandState((prev) =>
-        !prev
-          ? null
-          : {
-              ...prev,
-              selectedIndex:
-                (prev.selectedIndex + 1) %
-                prev.suggestions.length
-            }
-      );
-      return;
+    if (commandState && commandState.paneId === pane.id) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        chatAutocomplete.moveCommandSelection('down');
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        chatAutocomplete.moveCommandSelection('up');
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        applyCommandSuggestion(pane.id);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        chatAutocomplete.clearCommandState();
+        return;
+      }
     }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setCommandState((prev) =>
-        !prev
-          ? null
-          : {
-              ...prev,
-              selectedIndex:
-                (prev.selectedIndex - 1 + prev.suggestions.length) %
-                prev.suggestions.length
-            }
-      );
-      return;
-    }
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault();
-      applyCommandSuggestion(pane.id);
-      return;
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      setCommandState(null);
-      return;
-    }
-  }
 
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -741,43 +527,11 @@ const updateCommandSuggestions = (paneId: string, value: string) => {
     }
   };
 
-const applyCommandSuggestion = (paneId: string) => {
-  setCommandState((prev) => {
-    if (!prev || prev.paneId !== paneId) return prev;
-    const { suggestions, selectedIndex } = prev;
-    const cmd = suggestions[selectedIndex].name;
-    setInputValues((p) => ({ ...p, [paneId]: cmd + ' ' }));
-    return null;
-  });
-};
 
-  const insertEmoteToInput = (paneId: string, code: string) => {
-    incrementEmoteUsage(code);
 
-    const el = inputRefs.current[paneId];
-    const current = inputValues[paneId] || '';
-
-    if (!el) {
-      const newValue = (current + ' ' + code).trimStart();
-      setInputValues((prev) => ({ ...prev, [paneId]: newValue + ' ' }));
-      return;
-    }
-
-    const start = el.selectionStart ?? current.length;
-    const end = el.selectionEnd ?? current.length;
-
-    const before = current.slice(0, start);
-    const after = current.slice(end);
-
-    const newValue = before + code + ' ' + after;
-
-    setInputValues((prev) => ({ ...prev, [paneId]: newValue }));
-
-    requestAnimationFrame(() => {
-      const pos = before.length + code.length + 1;
-      el.selectionStart = el.selectionEnd = pos;
-      el.focus();
-    });
+    const insertEmoteToInput = (paneId: string, code: string) => {
+    chatEmotes.incrementEmoteUsage(code);
+    chatInput.insertTextAtCursor(paneId, code);
   };
 
   // Auto-scroll убран - Virtuoso управляет скроллом через followOutput
@@ -1007,7 +761,7 @@ const applyCommandSuggestion = (paneId: string) => {
           )}
 
           {chatPanes.map((pane) => {
-            const inputValue = inputValues[pane.id] || '';
+            const inputValue = chatInput.getInputValue(pane.id);
             const canSend = !!pane.channel && inputValue.trim().length > 0;
             const isSelected =
               selectedChannel?.toLowerCase() ===
@@ -1249,229 +1003,48 @@ const applyCommandSuggestion = (paneId: string) => {
                   style={messagesContainerStyle}
                   data={pane.messages}
                   followOutput={!pane.paused && !(hoverPauseKeyPressed && hoveredPaneId === pane.id)}
-                  itemContent={(index, m) => {
-                    if (m.isSystem) {
-                      return (
-                        <div style={systemMessageStyle(textScale)}>
-                          {m.text}
-                        </div>
-                      );
-                    }
-
-                    const isDeleted = !!m.deleted;
-                    const isCleared = !!m.cleared && !isDeleted;
-                    const isMentionedSelf = !!m.mentionedSelf;
-                    const isRaider = !!m.isRaider;
-                    const isFirstMessage = !!m.isFirstMessage;
-                    const isSharedChat = !!m.sourceRoomId;
-
-                    return (
-                      <div
-                        onContextMenu={(e) =>
-                          handleMessageContextMenu(
-                            e,
-                            pane.channel,
-                            m
-                          )
-                        }
-                        data-msg-id={m.msgId}
-                        style={messageStyle(
-                          isDeleted,
-                          isCleared,
-                          isMentionedSelf,
-                          textScale,
-                          isRaider,
-                          isFirstMessage
-                        )}
-                      >
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: 2,
-                            flexShrink: 0
-                          }}
-                        >
-                          {renderBadges(
-                            m.badges,
-                            m.badgeVersions,
-                            m.badgeInfo,
-                            badgeSets
-                          )}
-                        </div>
-                        <span
-                          style={usernameStyle(
-                            isDeleted,
-                            isCleared,
-                            m.color,
-                            textScale
-                          )}
-                        >
-                          {m.displayName || m.userLogin}:
-                        </span>
-                        {isSharedChat && (
-                          <span
-                            style={{
-                              fontSize: 9 * textScale,
-                              color: '#a78bfa',
-                              backgroundColor: '#2e1065',
-                              padding: '1px 4px',
-                              borderRadius: 3,
-                              fontWeight: 600,
-                              marginRight: 4
-                            }}
-                            title={`Сообщение из другого канала коллаборации${m.sourceChannelName ? `: ${m.sourceChannelName}` : ''}`}
-                          >
-                            🔗{m.sourceChannelName || ''}
-                          </span>
-                        )}
-                        <span
-                          style={messageTextStyle(
-                            isDeleted,
-                            isCleared,
-                            textScale
-                          )}
-                        >
-                          {renderMessageWithEmotes(m.text, m.emotes)}
-                        </span>
-                        {isDeleted && (
-                          <span style={deletedLabelStyle}>
-                            [удалено]
-                          </span>
-                        )}
-                      </div>
-                    );
-                  }}
+                  itemContent={(index, m) => (
+                    <ChatMessageItem
+                      message={m}
+                      textScale={textScale}
+                      badgeSets={badgeSets}
+                      onContextMenu={(e) => handleMessageContextMenu(e, pane.channel, m)}
+                    />
+                  )}
                 />
 
-                {/* Упоминания */}
-                {mentionState && mentionState.paneId === pane.id && (
-                  <div style={mentionBoxStyle(textScale)}>
-                    {mentionState.suggestions.map((name, idx) => (
-                      <div
-                        key={name}
-                        style={mentionItemStyle(idx === mentionState.selectedIndex)}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setMentionState((prev) =>
-                            prev ? { ...prev, selectedIndex: idx } : prev
-                          );
-                          applyMentionSuggestion(pane.id);
-                        }}
-                      >
-                        {name}
-                      </div>
-                    ))}
-                  </div>
+                                {chatAutocomplete.mentionState && chatAutocomplete.mentionState.paneId === pane.id && (
+                  <MentionAutocomplete
+                    suggestions={chatAutocomplete.mentionState.suggestions}
+                    selectedIndex={chatAutocomplete.mentionState.selectedIndex}
+                    onSelect={(idx) => chatAutocomplete.moveMentionSelection(idx === chatAutocomplete.mentionState!.selectedIndex + 1 ? 'down' : 'up')}
+                    onApply={() => applyMentionSuggestion(pane.id)}
+                    textScale={textScale}
+                  />
                 )}
 
-{commandState && commandState.paneId === pane.id && (
-  <div style={commandBoxStyle}>
-    {commandState.suggestions.map((cmd, idx) => (
-      <div
-        key={cmd.name}
-        style={commandItemStyle(idx === commandState.selectedIndex)}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          setCommandState((prev) =>
-            prev ? { ...prev, selectedIndex: idx } : prev
-          );
-          applyCommandSuggestion(pane.id);
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>{cmd.name}</span>
-        <span style={{ color: 'var(--color-textSecondary)', marginLeft: 8, fontSize: 11 }}>
-          {cmd.desc}
-        </span>
-      </div>
-    ))}
-  </div>
-)}
+                {chatAutocomplete.commandState && chatAutocomplete.commandState.paneId === pane.id && (
+                  <CommandAutocomplete
+                    suggestions={chatAutocomplete.commandState.suggestions}
+                    selectedIndex={chatAutocomplete.commandState.selectedIndex}
+                    onSelect={(idx) => chatAutocomplete.moveCommandSelection(idx === chatAutocomplete.commandState!.selectedIndex + 1 ? 'down' : 'up')}
+                    onApply={() => applyCommandSuggestion(pane.id)}
+                    textScale={textScale}
+                  />
+                )}
 
-                {/* ПИКЕР ЭМОТОВ */}
-                {emotePicker && emotePicker.paneId === pane.id && (
-                  <div style={emotePickerStyle}>
-                    <div style={emoteTabsStyle}>
-                      <button
-                        style={emoteTabButtonStyle(emotePicker.tab === 'channel')}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEmotePicker((prev) =>
-                            prev ? { ...prev, tab: 'channel' } : prev
-                          );
-                        }}
-                      >
-                        Канал
-                      </button>
-                      <button
-                        style={emoteTabButtonStyle(emotePicker.tab === 'user')}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEmotePicker((prev) =>
-                            prev ? { ...prev, tab: 'user' } : prev
-                          );
-                        }}
-                      >
-                        Мои
-                      </button>
-                      <button
-                        style={emoteTabButtonStyle(emotePicker.tab === 'global')}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEmotePicker((prev) =>
-                            prev ? { ...prev, tab: 'global' } : prev
-                          );
-                        }}
-                      >
-                        Глобальные
-                      </button>
-                    </div>
-
-                    <div style={emoteGridStyle}>
-                      {(() => {
-                        const chan = pane.channel.toLowerCase();
-                        const channelList = channelEmotes[chan] || [];
-
-                        let list: Emote[] = [];
-                        if (emotePicker.tab === 'channel') list = channelList;
-                        else if (emotePicker.tab === 'user') list = userEmotes;
-                        else if (emotePicker.tab === 'global') list = globalEmotes;
-
-                        if (!list.length) {
-                          return (
-                            <div style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)', padding: 4 }}>
-                              Нет эмотов для этой вкладки.
-                            </div>
-                          );
-                        }
-
-                        const sorted = [...list].sort((a, b) => {
-                          const ua = emoteUsage[a.name] || 0;
-                          const ub = emoteUsage[b.name] || 0;
-                          if (ua !== ub) return ub - ua;
-                          return a.name.localeCompare(b.name);
-                        });
-
-                        return sorted.map((e) => (
-                          <button
-                            key={e.id}
-                            type="button"
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              insertEmoteToInput(pane.id, e.name);
-                            }}
-                            style={emoteButtonStyle}
-                            title={e.ownerName ? `${e.name} (${e.ownerName})` : e.name}
-                          >
-                            <img
-                              src={e.url1x}
-                              alt={e.name}
-                              style={{ width: 24, height: 24 }}
-                            />
-                          </button>
-                        ));
-                      })()}
-                    </div>
-                  </div>
+                                {chatEmotes.emotePicker && chatEmotes.emotePicker.paneId === pane.id && (
+                  <EmotePicker
+                    paneId={pane.id}
+                    tab={chatEmotes.emotePicker.tab}
+                    onTabChange={(tab) => chatEmotes.setEmotePicker(prev => prev ? {...prev, tab} : null)}
+                    globalEmotes={chatEmotes.globalEmotes}
+                    userEmotes={chatEmotes.userEmotes}
+                    channelEmotes={chatEmotes.channelEmotes[pane.channel.toLowerCase()] || []}
+                    emoteUsage={chatEmotes.emoteUsage}
+                    onEmoteSelect={(code) => insertEmoteToInput(pane.id, code)}
+                    textScale={textScale}
+                  />
                 )}
 
                 {/* INPUT */}
@@ -1486,15 +1059,13 @@ const applyCommandSuggestion = (paneId: string) => {
                     }
                     onKeyDown={(e) => handleInputKeyDown(e, pane)}
                     style={inputStyle(textScale)}
-                    ref={(el) => {
-                      inputRefs.current[pane.id] = el;
-                    }}
+                                        ref={(el) => chatInput.setInputRef(pane.id, el)}
                   />
-                  <button
+                                    <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setEmotePicker((prev) =>
+                      chatEmotes.setEmotePicker((prev) =>
                         prev && prev.paneId === pane.id
                           ? null
                           : { paneId: pane.id, tab: 'channel' }
@@ -1519,74 +1090,25 @@ const applyCommandSuggestion = (paneId: string) => {
         </div>
       </div>
 
-      {/* CONTEXT MENU для сообщения */}
       {msgMenu && (
-        <div
-          style={contextMenuStyle(msgMenu.x, msgMenu.y)}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={contextMenuHeaderStyle}>
-            {msgMenu.message.displayName || msgMenu.message.userLogin}
-          </div>
-          <button
-            onClick={() => {
-              onOpenUserProfile(msgMenu.message.userLogin);
-              closeMsgMenu();
-            }}
-            style={menuItemStyle}
-          >
-            👤 Профиль
-          </button>
-          <button
-            onClick={() => {
-              onOpenUserLog(msgMenu.message.userLogin);
-              closeMsgMenu();
-            }}
-            style={menuItemStyle}
-          >
-            📜 Лог сообщений
-          </button>
-          {msgMenu.message.msgId && (
-            <button
-              onClick={() => handleModerationClick('deleteMessage')}
-              style={{ ...menuItemStyle, color: '#fca5a5' }}
-            >
-              🗑️ Удалить
-            </button>
-          )}
-          <div style={menuDividerStyle} />
-          <button
-            onClick={() => handleModerationClick('timeout', 60)}
-            style={menuItemStyle}
-          >
-            ⏱️ Таймаут 1м
-          </button>
-          <button
-            onClick={() => handleModerationClick('timeout', 600)}
-            style={menuItemStyle}
-          >
-            ⏱️ Таймаут 10м
-          </button>
-          <button
-            onClick={() => handleModerationClick('timeout', 3600)}
-            style={menuItemStyle}
-          >
-            ⏱️ Таймаут 1ч
-          </button>
-          <div style={menuDividerStyle} />
-          <button
-            onClick={() => handleModerationClick('ban')}
-            style={{ ...menuItemStyle, color: '#fca5a5' }}
-          >
-            ⛔ Бан
-          </button>
-          <button
-            onClick={() => handleModerationClick('unban')}
-            style={{ ...menuItemStyle, color: '#86efac' }}
-          >
-            ✅ Разбан
-          </button>
-        </div>
+        <ChatContextMenu
+          x={msgMenu.x}
+          y={msgMenu.y}
+          message={msgMenu.message}
+          onClose={closeMsgMenu}
+          onOpenProfile={() => {
+            onOpenUserProfile(msgMenu.message.userLogin);
+            closeMsgMenu();
+          }}
+          onOpenLog={() => {
+            onOpenUserLog(msgMenu.message.userLogin);
+            closeMsgMenu();
+          }}
+          onDeleteMessage={() => handleModerationClick('deleteMessage')}
+          onTimeout={(duration) => handleModerationClick('timeout', duration)}
+          onBan={() => handleModerationClick('ban')}
+          onUnban={() => handleModerationClick('unban')}
+        />
       )}
     </section>
   );
@@ -1782,28 +1304,6 @@ const dropdownMenuStyle: React.CSSProperties = {
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
 };
 
-const mentionBoxStyle = (fontScale: number): React.CSSProperties => ({
-  position: 'absolute',
-  bottom: 72,
-  left: 6,
-  right: 6,
-  maxHeight: 150,
-  overflowY: 'auto',
-  background: 'var(--color-chatMessage)',
-  border: '1px solid #374151',
-  borderRadius: 6,
-  zIndex: 2000,
-  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-  fontSize: 12 * fontScale
-});
-
-const mentionItemStyle = (active: boolean): React.CSSProperties => ({
-  padding: '4px 8px',
-  cursor: 'pointer',
-  background: active ? 'var(--color-border)' : 'transparent',
-  color: 'var(--color-text)'
-});
-
 const dropdownItemStyle = (selected: boolean): React.CSSProperties => ({
   width: '100%',
   textAlign: 'left',
@@ -1842,402 +1342,9 @@ function modeButtonStyle(
   };
 }
 
-const messageStyle = (
-  isDeleted: boolean = false,
-  isCleared: boolean = false,
-  isMentionedSelf: boolean = false,
-  fontScale: number = 1,
-  isRaider: boolean = false,
-  isFirstMessage: boolean = false
-): React.CSSProperties => ({
-  fontSize: 12 * fontScale,
-  background: isDeleted
-    ? 'var(--color-chatMessageDeleted)'
-    : isMentionedSelf
-    ? 'var(--color-chatMessageMention)'
-    : isRaider
-    ? 'var(--color-chatMessageRaid)'
-    : 'var(--color-chatMessage)',
-  borderRadius: 4,
-  padding: '2px 4px',
-  display: 'flex',
-  alignItems: 'baseline',
-  gap: 4,
-  opacity: isDeleted ? 0.7 : isCleared ? 0.6 : 1,
-  cursor: 'context-menu',
-  borderLeft: isDeleted ? '3px solid var(--color-error)' : isRaider ? '3px solid #3b82f6' : '3px solid transparent',
-  textDecoration: 'none',
-  outline: isFirstMessage ? '1px solid var(--color-chatMessageFirst)' : 'none',
-  flexWrap: 'wrap',
-  wordBreak: 'break-word',
-  overflowWrap: 'break-word'
-});
-
-const usernameStyle = (
-  isDeleted: boolean,
-  isCleared: boolean,
-  color: string | undefined,
-  fontScale: number = 1
-): React.CSSProperties => ({
-  fontWeight: 600,
-  fontSize: 12 * fontScale,
-  color: isDeleted
-    ? 'var(--color-textSecondary)'
-    : isCleared
-    ? 'var(--color-textMuted)'
-    : color || 'var(--color-text)',
-  marginRight: 4,
-  textDecoration: 'none',
-  flexShrink: 0
-});
-
-const messageTextStyle = (
-  isDeleted: boolean,
-  isCleared: boolean,
-  fontScale: number = 1
-): React.CSSProperties => ({
-  fontSize: 12 * fontScale,
-  color: isDeleted ? 'var(--color-textSecondary)' : isCleared ? 'var(--color-textMuted)' : 'var(--color-text)',
-  textDecoration: isDeleted ? 'line-through' : 'none',
-  wordBreak: 'break-word',
-  overflowWrap: 'break-word',
-  flex: 1,
-  minWidth: 0
-});
-
-const deletedLabelStyle: React.CSSProperties = {
-  fontSize: 10,
-  color: 'var(--color-error)',
-  marginLeft: 'auto',
-  flexShrink: 0,
-  fontStyle: 'italic',
-  fontWeight: 'bold'
-};
-
-const contextMenuStyle = (x: number, y: number): React.CSSProperties => ({
-  position: 'fixed',
-  top: y,
-  left: x,
-  background: 'var(--color-chatMessage)',
-  border: '1px solid #374151',
-  borderRadius: 6,
-  padding: 4,
-  zIndex: 3000,
-  width: 'max-content',
-  boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
-});
-
-const contextMenuHeaderStyle: React.CSSProperties = {
-  padding: '4px 8px',
-  fontSize: 12,
-  color: 'var(--color-textSecondary)',
-  borderBottom: '1px solid var(--color-border)',
-  marginBottom: 4
-};
-
-const menuItemStyle: React.CSSProperties = {
-  width: '100%',
-  textAlign: 'left',
-  padding: '5px 10px',
-  borderRadius: 4,
-  border: 'none',
-  background: 'transparent',
-  color: 'var(--color-text)',
-  fontSize: 12,
-  cursor: 'pointer',
-  whiteSpace: 'nowrap'
-};
-
-const menuDividerStyle: React.CSSProperties = {
-  borderTop: '1px solid var(--color-border)',
-  margin: '4px 0'
-};
-
-const systemMessageStyle = (fontScale: number): React.CSSProperties => ({
-  textAlign: 'center',
-  color: 'var(--color-textSecondary)',
-  fontSize: 11 * fontScale,
-  padding: '4px 0',
-  borderTop: '1px solid #374151',
-  borderBottom: '1px solid #374151',
-  margin: '8px 0',
-  background: 'var(--color-surfaceHover)',
-  fontStyle: 'italic'
-});
-
-const emotePickerStyle: React.CSSProperties = {
-  position: 'absolute',
-  bottom: 72,
-  left: 6,
-  right: 6,
-  maxHeight: 230,
-  overflowY: 'auto',
-  background: 'var(--color-chatMessage)',
-  border: '1px solid #374151',
-  borderRadius: 6,
-  zIndex: 1900,
-  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-  padding: 4
-};
-
-const emoteTabsStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 4,
-  marginBottom: 4
-};
-
-const emoteTabButtonStyle = (active: boolean): React.CSSProperties => ({
-  flex: 1,
-  padding: '2px 4px',
-  borderRadius: 4,
-  border: '1px solid var(--color-border)',
-  background: active ? 'var(--color-border)' : 'var(--color-modInactive)',
-  color: 'var(--color-text)',
-  fontSize: 11,
-  cursor: 'pointer'
-});
-
-const emoteGridStyle: React.CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 4
-};
-
-const emoteButtonStyle: React.CSSProperties = {
-  width: 30,
-  height: 30,
-  borderRadius: 4,
-  border: 'none',
-  background: 'var(--color-modInactive)',
-  padding: 2,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center'
-};
-
-const commandBoxStyle: React.CSSProperties = {
-  position: 'absolute',
-  bottom: 72,
-  left: 6,
-  right: 6,
-  maxHeight: 150,
-  overflowY: 'auto',
-  background: 'var(--color-chatMessage)',
-  border: '1px solid #374151',
-  borderRadius: 6,
-  zIndex: 2100,
-  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-  fontSize: 12
-};
-
-const commandItemStyle = (active: boolean): React.CSSProperties => ({
-  padding: '4px 8px',
-  cursor: 'pointer',
-  background: active ? 'var(--color-border)' : 'transparent',
-  color: 'var(--color-text)',
-  display: 'flex',
-  alignItems: 'center'
-});
-
 // =====================================================
-// Helpers
+// Styles
 // =====================================================
-
-function clampWidth(w: number): number {
-  return Math.min(600, Math.max(220, w));
-}
-
-function clampHeight(h: number): number {
-  return Math.min(600, Math.max(180, h));
-}
-
-function clampAutoScale(value: number): number {
-  const min = 0.7;
-  const max = 1.5;
-  if (Number.isNaN(value)) return 1;
-  return Math.min(max, Math.max(min, value));
-}
-
-function formatFollowersDuration(minutes: number): string {
-  if (minutes < 0 || isNaN(minutes)) return '';
-  if (minutes === 0) return '0м';
-  if (minutes < 60) return `${minutes}м`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}ч`;
-  if (minutes < 10080) return `${Math.floor(minutes / 1440)}д`;
-  if (minutes < 43200) return `${Math.floor(minutes / 10080)}н`;
-  return `${Math.floor(minutes / 43200)}мес`;
-}
-
-// Построение URL для эмота по CDN-шаблону (поддерживает анимацию, если есть)
-function buildEmoteUrls(id: string): { url1x: string; url2x: string; url4x: string } {
-  const base = `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark`;
-  return {
-    url1x: `${base}/1.0`,
-    url2x: `${base}/2.0`,
-    url4x: `${base}/3.0`
-  };
-}
-
-function badgeTitle(setId: string, months?: string): string {
-  switch (setId) {
-    case 'broadcaster':
-      return 'Стример';
-    case 'moderator':
-      return 'Модератор';
-    case 'vip':
-      return 'VIP';
-    case 'subscriber':
-      return months ? `Подписчик (${months} мес.)` : 'Подписчик';
-    case 'staff':
-      return 'Twitch Staff';
-    case 'admin':
-      return 'Twitch Admin';
-    case 'global_mod':
-      return 'Global Moderator';
-    default:
-      return setId;
-  }
-}
-
-function renderBadges(
-  badges: string[],
-  badgeVersions?: Record<string, string>,
-  badgeInfo?: Record<string, string>,
-  badgeSets?: Record<string, Record<string, any>>
-) {
-  if (!badges.length) return null;
-
-  if (badgeSets && Object.keys(badgeSets).length > 0) {
-    return badges.map((setId, i) => {
-      const set = badgeSets[setId];
-      if (!set) return null;
-
-      const versionId = badgeVersions?.[setId] || '1';
-      const verData =
-        set[versionId] || Object.values(set)[0];
-
-      if (!verData) return null;
-
-      const url =
-        verData.image_url_1x ||
-        verData.image_url_2x ||
-        verData.image_url_4x;
-      if (!url) return null;
-
-      const months = badgeInfo?.[setId];
-      const title =
-        verData.title || badgeTitle(setId, months);
-
-      return (
-        <img
-          key={setId + i}
-          src={url}
-          alt={setId}
-          title={title}
-          style={{
-            width: 18,
-            height: 18,
-            marginRight: 2,
-            flexShrink: 0
-          }}
-        />
-      );
-    });
-  }
-
-  const mapping: Record<string, { label: string; color: string }> = {
-    broadcaster: { label: 'S', color: '#a855f7' },
-    moderator: { label: 'M', color: 'var(--color-success)' },
-    vip: { label: 'V', color: '#0ea5e9' },
-    subscriber: { label: 'Sub', color: '#f97316' },
-    staff: { label: 'T', color: '#f97316' },
-    admin: { label: 'T', color: '#f97316' },
-    global_mod: { label: 'T', color: '#f97316' }
-  };
-
-  return badges.map((setId, i) => {
-    const info = mapping[setId];
-    if (!info) return null;
-
-    const months = badgeInfo?.[setId];
-    const title = badgeTitle(setId, months);
-
-    return (
-      <span
-        key={setId + i}
-        title={title}
-        style={{
-          minWidth: 14,
-          height: 14,
-          borderRadius: 4,
-          fontSize: 9,
-          lineHeight: '14px',
-          textAlign: 'center',
-          background: info.color,
-          color: 'var(--color-chatBackground)',
-          fontWeight: 700,
-          padding: '0 2px',
-          marginRight: 2,
-          flexShrink: 0
-        }}
-      >
-        {info.label}
-      </span>
-    );
-  });
-}
-
-function renderMessageWithEmotes(
-  text: string,
-  emotes?: Record<string, string[]>
-): React.ReactNode {
-  if (!emotes || Object.keys(emotes).length === 0) return text;
-  type EmoteToken = { start: number; end: number; id: string };
-  const tokens: EmoteToken[] = [];
-  for (const [id, ranges] of Object.entries(emotes)) {
-    for (const r of ranges) {
-      const [s, e] = r.split('-').map((n) => parseInt(n, 10));
-      if (!Number.isNaN(s) && !Number.isNaN(e) && s <= e) {
-        tokens.push({ start: s, end: e, id });
-      }
-    }
-  }
-  if (!tokens.length) return text;
-  tokens.sort((a, b) => a.start - b.start);
-  const result: React.ReactNode[] = [];
-  let lastIndex = 0;
-  tokens.forEach((t, idx) => {
-    if (t.start > lastIndex) {
-      result.push(
-        <span key={`t-${idx}-${lastIndex}`}>
-          {text.slice(lastIndex, t.start)}
-        </span>
-      );
-    }
-    const emoteCode = text.slice(t.start, t.end + 1);
-    const url = `https://static-cdn.jtvnw.net/emoticons/v2/${t.id}/default/dark/1.0`;
-    result.push(
-      <img
-        key={`e-${idx}-${t.id}`}
-        src={url}
-        alt={emoteCode}
-        style={{
-          verticalAlign: 'middle',
-          margin: '0 1px',
-          maxHeight: '1.2em'
-        }}
-      />
-    );
-    lastIndex = t.end + 1;
-  });
-  if (lastIndex < text.length) {
-    result.push(
-      <span key={'t-tail'}>{text.slice(lastIndex)}</span>
-    );
-  }
-  return result;
-}
 
 
 

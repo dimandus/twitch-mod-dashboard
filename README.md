@@ -20,7 +20,7 @@
 - Просмотр сообщений, задержанных AutoMod
 - Одобрение или удаление сообщений в реальном времени
 - Автоматическое подключение к каналам через PubSub
-- Подробная документация: [AUTOMOD.md](./AUTOMOD.md)
+- Подробная документация: [AUTOMOD.md](./docs/AUTOMOD.md)
 
 ### 🔨 Модерация
 - Бан / разбан / таймауты (через Helix API)
@@ -198,9 +198,12 @@ twitch-mod-dashboard/
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
-├── README.md
-├── ROADMAP.md                   # План развития
-└── AUTOMOD.md                   # Документация AutoMod
+├── docs/                        # Документация
+│   ├── AUTOMOD.md               # Документация AutoMod
+│   ├── ROADMAP.md               # План развития
+│   ├── THEMES.md                # Система тем
+│   └── REFACTORING_*.md         # Документация рефакторинга
+└── README.md
 ```
 
 ---
