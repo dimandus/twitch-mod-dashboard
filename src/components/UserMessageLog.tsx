@@ -45,20 +45,23 @@ const UserMessageLog: React.FC<UserMessageLogProps> = ({
     null
   );
 
+  // Безопасная проверка messages
+  const messages = user.messages || [];
+
   // Авто-скролл вниз при новых сообщениях
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [user.messages]);
+  }, [messages]);
 
   // Уникальные каналы для фильтра
-  const channels = Array.from(new Set(user.messages.map((m) => m.channel)));
+  const channels = Array.from(new Set(messages.map((m) => m.channel)));
 
   // Фильтрованные сообщения
   const filteredMessages = selectedChannel
-    ? user.messages.filter((m) => m.channel === selectedChannel)
-    : user.messages;
+    ? messages.filter((m) => m.channel === selectedChannel)
+    : messages;
 
   // Сортировка по времени
   const sortedMessages = [...filteredMessages].sort(
@@ -126,7 +129,7 @@ const UserMessageLog: React.FC<UserMessageLogProps> = ({
               {user.displayName || user.login}
             </span>
             <span style={{ color: '#9ca3af', fontSize: 13 }}>
-              ({user.messages.length} сообщений)
+              ({messages.length} сообщений)
             </span>
           </div>
           <button onClick={onClose} style={closeButtonStyle}>
@@ -194,10 +197,10 @@ const UserMessageLog: React.FC<UserMessageLogProps> = ({
               }}
               style={filterButtonStyle(selectedChannel === null)}
             >
-              Все ({user.messages.length})
+              Все ({messages.length})
             </button>
             {channels.map((ch) => {
-              const count = user.messages.filter(
+              const count = messages.filter(
                 (m) => m.channel === ch
               ).length;
               return (
