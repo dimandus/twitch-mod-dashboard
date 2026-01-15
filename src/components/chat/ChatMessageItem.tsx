@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Badges } from './Badges';
 import { MessageWithEmotes } from './MessageWithEmotes';
 import { ChatMessage } from '../../views/ChatArea';
@@ -12,7 +12,7 @@ interface ChatMessageItemProps {
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
-export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
+export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   message: m,
   textScale,
   badgeSets,
@@ -20,8 +20,11 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
 }) => {
   const { enabled: autoModEnabled, triggers } = useAutoModerationStore();
   
-  // Проверяем сообщение на триггеры автомодерации
-  const isAutoModTriggered = !m.isSystem && autoModEnabled && checkAutoModTriggers(m.text, triggers);
+  // Мемоизируем проверку триггеров
+  const isAutoModTriggered = useMemo(
+    () => !m.isSystem && autoModEnabled && checkAutoModTriggers(m.text, triggers),
+    [m.isSystem, m.text, autoModEnabled, triggers]
+  );
   if (m.isSystem) {
     return (
       <div
@@ -170,4 +173,4 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       )}
     </div>
   );
-};
+});

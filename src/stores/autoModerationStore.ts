@@ -17,6 +17,7 @@ interface AutoModerationStore {
   removeTrigger: (id: string) => void;
   toggleTrigger: (id: string) => void;
   updateTrigger: (id: string, value: string) => void;
+  duplicateTrigger: (id: string) => void;
 }
 
 export const useAutoModerationStore = create<AutoModerationStore>()(
@@ -52,7 +53,19 @@ export const useAutoModerationStore = create<AutoModerationStore>()(
           triggers: state.triggers.map((t) =>
             t.id === id ? { ...t, value } : t
           )
-        }))
+        })),
+      
+      duplicateTrigger: (id) =>
+        set((state) => {
+          const trigger = state.triggers.find((t) => t.id === id);
+          if (!trigger) return state;
+          return {
+            triggers: [
+              ...state.triggers,
+              { ...trigger, id: `trigger-${Date.now()}-${Math.random()}` }
+            ]
+          };
+        })
     }),
     {
       name: 'twitch-automod-store'
