@@ -289,16 +289,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
                 <Virtuoso
                   ref={(el) => { if (el) scrollContainersRef.current[pane.id] = el as any; }}
-                  style={styles.messagesContainerStyle}
+                  style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    overflowX: 'hidden'
+                  }}
                   data={pane.messages}
                   followOutput={!pane.paused && !(ui.hoverPauseKeyPressed && ui.hoveredPaneId === pane.id)}
                   itemContent={(index, m) => (
-                    <ChatMessageItem
-                      message={m}
-                      textScale={textScale}
-                      badgeSets={ui.badgeSets}
-                      onContextMenu={(e) => moderation.handleMessageContextMenu(e, pane.channel, m)}
-                    />
+                    <div style={{ padding: '4px 18px 4px 8px' }}>
+                      <ChatMessageItem
+                        message={m}
+                        textScale={textScale}
+                        badgeSets={ui.badgeSets}
+                        onContextMenu={(e) => moderation.handleMessageContextMenu(e, pane.channel, m)}
+                      />
+                    </div>
                   )}
                 />
 

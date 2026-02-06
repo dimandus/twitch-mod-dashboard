@@ -189,22 +189,20 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       <Virtuoso
         style={{
           flex: 1,
-          padding: '8px 18px 8px 8px',
-          display: 'flex',
-          flexDirection: 'column',
           overflowY: 'auto',
-          overflowX: 'hidden',
-          gap: 4
+          overflowX: 'hidden'
         }}
         data={pane.messages}
         followOutput={!pane.paused && !(hoverPauseKeyPressed && hoveredPaneId === pane.id)}
         itemContent={(index, m) => (
-          <ChatMessageItem
-            message={m}
-            textScale={textScale}
-            badgeSets={badgeSets}
-            onContextMenu={(e) => onMessageContextMenu(e, pane.channel, m)}
-          />
+          <div style={{ padding: '4px 18px 4px 8px' }}>
+            <ChatMessageItem
+              message={m}
+              textScale={textScale}
+              badgeSets={badgeSets}
+              onContextMenu={(e) => onMessageContextMenu(e, pane.channel, m)}
+            />
+          </div>
         )}
       />
 

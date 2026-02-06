@@ -77,8 +77,7 @@ export const messagesContainerStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   overflowY: 'auto',
-  overflowX: 'hidden',
-  gap: 4
+  overflowX: 'hidden'
 };
 
 export const inputContainerStyle: React.CSSProperties = {
