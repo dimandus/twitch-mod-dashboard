@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const DEFAULT_FONT_MIN = 0.7;
 const DEFAULT_FONT_MAX = 1.5;
@@ -18,6 +18,8 @@ export const useUIScale = () => {
   const [fontScaleMax, setFontScaleMax] = useState(DEFAULT_FONT_MAX);
   const [globalScaleMin, setGlobalScaleMin] = useState(DEFAULT_GLOBAL_MIN);
   const [globalScaleMax, setGlobalScaleMax] = useState(DEFAULT_GLOBAL_MAX);
+
+  const hasLoadedRef = useRef(false);
 
   // Загрузка настроек при старте
   useEffect(() => {
@@ -55,14 +57,17 @@ export const useUIScale = () => {
         if (typeof storedGlobal === 'number') {
           setGlobalScale(clamp(storedGlobal, gsMin, gsMax));
         }
+        hasLoadedRef.current = true;
       } catch (err) {
         console.warn('[useUIScale] не удалось загрузить UI-настройки', err);
+        hasLoadedRef.current = true;
       }
     })();
   }, []);
 
   // Сохранение при изменении
   useEffect(() => {
+    if (!hasLoadedRef.current) return;
     (async () => {
       try {
         await window.electronAPI.config.set('ui.chat.fontScale', fontScale);
