@@ -279,6 +279,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 <ChatModesBar
                   channel={pane.channel}
                   modes={modes}
+                  textScale={textScale}
                   onModeToggle={onModeToggle}
                   onClearChat={() => moderation.handleClearGlobal(pane)}
                   openDropdown={ui.openDropdown}

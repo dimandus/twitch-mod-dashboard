@@ -18,6 +18,7 @@ type ChatModeKey = 'slow' | 'emote' | 'followers' | 'subs' | 'unique' | 'shield'
 interface ChatModesBarProps {
   channel: string;
   modes: ChatModes;
+  textScale: number;
   onModeToggle: (channel: string, mode: ChatModeKey, value?: number) => void;
   onClearChat: () => void;
   openDropdown: { channel: string; type: 'slow' | 'followers' } | null;
@@ -29,6 +30,7 @@ interface ChatModesBarProps {
 export const ChatModesBar: React.FC<ChatModesBarProps> = ({
   channel,
   modes,
+  textScale,
   onModeToggle,
   onClearChat,
   openDropdown,
@@ -56,7 +58,7 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
           e.stopPropagation();
           onModeToggle(channel, 'shield');
         }}
-        style={modeButtonStyle(modes.shield, 'var(--color-error)')}
+        style={modeButtonStyle(modes.shield, textScale, 'var(--color-error)')}
         title="Защитный режим"
       >
         🛡️
@@ -65,11 +67,11 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
       <div style={{ position: 'relative' }}>
         <button
           onClick={(e) => onDropdownClick(e, channel, 'slow')}
-          style={modeButtonStyle(modes.slow)}
+          style={modeButtonStyle(modes.slow, textScale)}
           title="Медленный режим"
         >
           Slow {modes.slow && modes.slowDuration > 0 ? `(${modes.slowDuration}с)` : ''}{' '}
-          <span style={{ marginLeft: 2, fontSize: 8 }}>▼</span>
+          <span style={{ marginLeft: 2, fontSize: 8 * textScale }}>▼</span>
         </button>
         {isSlowDropdownOpen && (
           <div
@@ -84,7 +86,7 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
                   opt.value === 0
                     ? !modes.slow
                     : modes.slow && modes.slowDuration === opt.value
-                )}
+                , textScale)}
               >
                 {opt.label}
               </button>
@@ -98,7 +100,7 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
           e.stopPropagation();
           onModeToggle(channel, 'emote');
         }}
-        style={modeButtonStyle(modes.emote)}
+          style={modeButtonStyle(modes.emote, textScale)}
         title="Только эмодзи"
       >
         Emote
@@ -107,11 +109,11 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
       <div style={{ position: 'relative' }}>
         <button
           onClick={(e) => onDropdownClick(e, channel, 'followers')}
-          style={modeButtonStyle(modes.followers)}
+          style={modeButtonStyle(modes.followers, textScale)}
           title="Только фолловеры"
         >
           Foll {modes.followers ? `(${formatFollowersDuration(modes.followersDuration)})` : ''}{' '}
-          <span style={{ marginLeft: 2, fontSize: 8 }}>▼</span>
+          <span style={{ marginLeft: 2, fontSize: 8 * textScale }}>▼</span>
         </button>
         {isFollowersDropdownOpen && (
           <div
@@ -126,7 +128,7 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
                   opt.value === -1
                     ? !modes.followers
                     : modes.followers && modes.followersDuration === opt.value
-                )}
+                , textScale)}
               >
                 {opt.label}
               </button>
@@ -140,7 +142,7 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
           e.stopPropagation();
           onModeToggle(channel, 'subs');
         }}
-        style={modeButtonStyle(modes.subs)}
+          style={modeButtonStyle(modes.subs, textScale)}
         title="Только подписчики"
       >
         Subs
@@ -150,7 +152,7 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
           e.stopPropagation();
           onModeToggle(channel, 'unique');
         }}
-        style={modeButtonStyle(modes.unique)}
+        style={modeButtonStyle(modes.unique, textScale)}
         title="Уникальные сообщения"
       >
         Uniq
@@ -161,7 +163,7 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
           onClearChat();
         }}
         style={{
-          ...modeButtonStyle(false),
+          ...modeButtonStyle(false, textScale),
           borderColor: '#f97316',
           color: '#f97316'
         }}
@@ -173,7 +175,7 @@ export const ChatModesBar: React.FC<ChatModesBarProps> = ({
   );
 };
 
-function modeButtonStyle(active: boolean, activeColor = '#4ade80'): React.CSSProperties {
+function modeButtonStyle(active: boolean, textScale: number, activeColor = '#4ade80'): React.CSSProperties {
   return {
     padding: '1px 4px',
     borderRadius: 4,
@@ -188,7 +190,7 @@ function modeButtonStyle(active: boolean, activeColor = '#4ade80'): React.CSSPro
         ? '#fecaca'
         : '#bbf7d0'
       : 'var(--color-text)',
-    fontSize: 9,
+    fontSize: 9 * textScale,
     cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center'
@@ -208,7 +210,7 @@ const dropdownMenuStyle: React.CSSProperties = {
   boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
 };
 
-const dropdownItemStyle = (selected: boolean): React.CSSProperties => ({
+const dropdownItemStyle = (selected: boolean, textScale: number): React.CSSProperties => ({
   width: '100%',
   textAlign: 'left',
   padding: '4px 8px',
@@ -216,7 +218,7 @@ const dropdownItemStyle = (selected: boolean): React.CSSProperties => ({
   border: 'none',
   background: selected ? 'var(--color-border)' : 'transparent',
   color: 'var(--color-text)',
-  fontSize: 11,
+  fontSize: 11 * textScale,
   cursor: 'pointer',
   marginBottom: 2
 });
