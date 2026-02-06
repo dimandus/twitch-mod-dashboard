@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { ChatMessageItem } from '../components/chat/ChatMessageItem';
 import { ChatModesBar } from '../components/chat/ChatModesBar';

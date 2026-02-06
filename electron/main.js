@@ -9,6 +9,7 @@ const store = require('./store');
 const { TwitchPubSub } = require('./modules/TwitchPubSub');
 
 const isDev = !app.isPackaged;
+const loadFromFile = process.env.ELECTRON_LOAD_FILE === '1';
 
 // Логирование с уровнями серьезности
 const log = {
@@ -284,7 +285,7 @@ function createWindow() {
     }
   });
 
-  if (isDev) {
+  if (isDev && !loadFromFile) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
