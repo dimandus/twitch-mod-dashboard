@@ -77,6 +77,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     onSendMessage(pane.channel, text);
     chatInput.clearInput(pane.id);
     chatAutocomplete.clearMentionState();
+    chatEmotes.setEmotePicker((prev) => (prev && prev.paneId === pane.id ? null : prev));
   };
 
   const applyMentionSuggestion = (paneId: string) => {
