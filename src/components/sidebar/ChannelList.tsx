@@ -42,6 +42,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         const dotColor = st.isLive === undefined ? '#4b5563' : st.isLive ? 'var(--color-success)' : '#ef4444';
         const isSelected = selectedChannel === ch;
 
+        const viewerCount = st.viewerCount ?? 0;
+        const hasViewerCount = st.viewerCount !== null && st.viewerCount !== undefined;
+        const hasModCount = st.modCount !== null && st.modCount !== undefined;
+        const statusText = hasModCount
+          ? `(${viewerCount}/${st.modCount})`
+          : hasViewerCount
+          ? `(${viewerCount})`
+          : '';
+
         return (
           <button
             key={ch}
@@ -80,16 +89,18 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 }}
               />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch}</span>
-              <span
-                style={{
-                  fontSize: 11 * textScale,
-                  color: 'var(--color-textSecondary)',
-                  marginLeft: 'auto',
-                  flexShrink: 0
-                }}
-              >
-                ({st.viewerCount ?? 0}/{st.modCount ?? '?'})
-              </span>
+              {statusText && (
+                <span
+                  style={{
+                    fontSize: 11 * textScale,
+                    color: 'var(--color-textSecondary)',
+                    marginLeft: 'auto',
+                    flexShrink: 0
+                  }}
+                >
+                  {statusText}
+                </span>
+              )}
               <span
                 style={{
                   marginLeft: 4,
