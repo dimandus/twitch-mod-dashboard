@@ -297,7 +297,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     overflowX: 'hidden'
                   }}
                   data={pane.messages}
-                  followOutput={!pane.paused && !(ui.hoverPauseKeyPressed && ui.hoveredPaneId === pane.id)}
+                  followOutput={pane.paused || (ui.hoverPauseKeyPressed && ui.hoveredPaneId === pane.id) ? false : 'auto'}
+                  atBottomThreshold={80}
                   itemContent={(index, m) => (
                     <div style={{ padding: '4px 18px 4px 8px' }}>
                       <ChatMessageItem
