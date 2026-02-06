@@ -168,6 +168,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     ui.setOpenDropdown(null);
   };
 
+  useEffect(() => {
+    const handlePauseKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (!ui.hoverPauseKey || e.key !== ui.hoverPauseKey) return;
+
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      if (!selectedChannel) return;
+      const active = chatPanes.find(
+        (pane) => pane.channel.toLowerCase() === selectedChannel.toLowerCase()
+      );
+      if (!active) return;
+
+      onTogglePause(active.id);
+    };
+
+    window.addEventListener('keydown', handlePauseKey);
+    return () => window.removeEventListener('keydown', handlePauseKey);
+  }, [ui.hoverPauseKey, selectedChannel, chatPanes, onTogglePause]);
+
   const isTwoRows = ui.rows === 2;
   const combinedScale = globalScale * ui.autoScale;
   const textScale = fontScale * combinedScale;
@@ -273,6 +296,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button onClick={(e) => { e.stopPropagation(); onClearChat(pane.id); }} title="Очистить локально" style={styles.iconButtonStyle}>⌫</button>
                     <button onClick={(e) => { e.stopPropagation(); onTogglePause(pane.id); }} title={pane.paused ? 'Продолжить' : 'Пауза'} style={styles.iconButtonStyle}>{pane.paused ? '▶' : '⏸'}</button>
+                    {pane.paused && (
+                      <span style={{
+                        alignSelf: 'center',
+                        fontSize: 10 * textScale,
+                        color: '#f59e0b',
+                        background: 'rgba(245, 158, 11, 0.15)',
+                        border: '1px solid rgba(245, 158, 11, 0.5)',
+                        borderRadius: 4,
+                        padding: '1px 4px',
+                        fontWeight: 600
+                      }}>
+                        Пауза
+                      </span>
+                    )}
                     <button onClick={(e) => { e.stopPropagation(); onRemoveChat(pane.id); }} title="Закрыть" style={styles.iconButtonStyle}>✕</button>
                   </div>
                 </div>

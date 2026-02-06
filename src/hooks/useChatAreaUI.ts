@@ -153,6 +153,7 @@ export const useChatAreaUI = () => {
     hoveredPaneId,
     setHoveredPaneId,
     hoverPauseKeyPressed,
+    hoverPauseKey,
     msgMenu,
     setMsgMenu,
     openDropdown,
