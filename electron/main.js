@@ -472,7 +472,7 @@ async function startTwitchLogin() {
 // ----------------- Twitch OAuth через Dimandus -----------------
 
 async function startTwitchDimandusAuth() {
-  const scopeParam = TWITCH_SCOPES.join('+');
+  const scopeParam = TWITCH_SCOPES.join(' ');
   const initUrl = `${DIMANDUS_BASE_URL}/api/auth/twitch/init?scope=${encodeURIComponent(
     scopeParam
   )}`;
@@ -1188,9 +1188,49 @@ ipcMain.handle('twitch:getChannelEmotes', (e, channelLogin) =>
 // AUTOMOD PUBSUB
 // =====================================================
 
+const automodQueue = [];
+const AUTOMOD_QUEUE_LIMIT = 200;
+
+function normalizeAutoModMessage(data) {
+  const payload = data?.data || data;
+  const msgId = payload?.id || payload?.content_classification?.msg_id || payload?.message?.id;
+  const channel = payload?.message?.channel_login || payload?.channel_login || payload?.channel;
+  const userId = payload?.message?.sender?.user_id || '';
+  const userLogin = payload?.message?.sender?.login || '';
+  const message = payload?.message?.content?.text || payload?.message?.content?.message || '';
+  const reason = payload?.reason_code || payload?.caught_message_reason?.reason || 'unknown';
+
+  if (!msgId || !message) return null;
+
+  return {
+    msgId,
+    channel,
+    userId,
+    userLogin,
+    message,
+    reason,
+    timestamp: Date.now(),
+    status: 'pending'
+  };
+}
+
+function sendAutoModLog(level, message, data) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('automod:log', {
+      level,
+      message,
+      data,
+      timestamp: Date.now()
+    });
+  }
+}
+
 ipcMain.handle('automod:connect', async (e, channelLogins) => {
   try {
-    const accessToken = store.get('twitch.accessToken');
+    log.info('[AutoMod] Запрос подключения', { channels: channelLogins });
+    sendAutoModLog('info', 'Запрос подключения', { channels: channelLogins });
+    const ensuredToken = await ensureAccessTokenHelix();
+    const accessToken = ensuredToken || store.get('twitch.accessToken');
     const userId = store.get('twitch.userId');
     
     if (!accessToken || !userId) {
@@ -1210,6 +1250,7 @@ ipcMain.handle('automod:connect', async (e, channelLogins) => {
 
     if (channelIds.length === 0) {
       console.warn('[AutoMod] Нет валидных каналов для подключения');
+      sendAutoModLog('warn', 'Нет валидных каналов для подключения', { channels: channelLogins });
       return;
     }
 
@@ -1223,29 +1264,60 @@ ipcMain.handle('automod:connect', async (e, channelLogins) => {
     
     // Подписываемся на события
     pubsubClient.onMessage((data) => {
+      log.info('[AutoMod] PubSub raw', data);
+      sendAutoModLog('debug', 'PubSub raw', data);
+      log.info('[AutoMod] PubSub сообщение', {
+        channel: data?.data?.message?.channel_login || data?.channel_login || data?.channel,
+        msgId: data?.data?.id || data?.content_classification?.msg_id || data?.data?.message?.id
+      });
+      sendAutoModLog('info', 'PubSub сообщение', {
+        channel: data?.data?.message?.channel_login || data?.channel_login || data?.channel,
+        msgId: data?.data?.id || data?.content_classification?.msg_id || data?.data?.message?.id
+      });
+      const normalized = normalizeAutoModMessage(data);
+      if (normalized) {
+        if (!automodQueue.some((m) => m.msgId === normalized.msgId)) {
+          automodQueue.push(normalized);
+          if (automodQueue.length > AUTOMOD_QUEUE_LIMIT) {
+            automodQueue.splice(0, automodQueue.length - AUTOMOD_QUEUE_LIMIT);
+          }
+        }
+      }
+
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('automod:message', data);
       }
     });
 
+    log.info('[AutoMod] Подключение PubSub', { userId, channelIds });
+    sendAutoModLog('info', 'Подключение PubSub', { userId, channelIds });
     pubsubClient.connect(accessToken, userId, channelIds);
     
     return { success: true };
   } catch (err) {
     console.error('[AutoMod] Ошибка подключения:', err);
+    sendAutoModLog('error', 'Ошибка подключения', { error: err?.message || String(err) });
     throw err;
   }
 });
 
 ipcMain.handle('automod:disconnect', () => {
   if (pubsubClient) {
+    log.info('[AutoMod] Отключение PubSub');
+    sendAutoModLog('info', 'Отключение PubSub');
     pubsubClient.disconnect();
     pubsubClient = null;
   }
 });
 
+ipcMain.handle('automod:getQueue', () => {
+  return automodQueue;
+});
+
 ipcMain.handle('automod:approve', async (e, msgId) => {
   try {
+    log.info('[AutoMod] Approve', { msgId });
+    sendAutoModLog('info', 'Approve', { msgId });
     const userId = store.get('twitch.userId');
     const res = await helixFetch('https://api.twitch.tv/helix/moderation/automod/message', {
       method: 'POST',
@@ -1258,18 +1330,29 @@ ipcMain.handle('automod:approve', async (e, msgId) => {
     
     if (!res.ok) {
       const json = await res.json();
-      throw new Error(json.message || 'Не удалось одобрить');
+      const message = json.message || 'Не удалось одобрить';
+      if (message.includes('message-status attempted to update')) {
+        const idx = automodQueue.findIndex((m) => m.msgId === msgId);
+        if (idx >= 0) automodQueue.splice(idx, 1);
+        return { success: true, alreadyHandled: true };
+      }
+      throw new Error(message);
     }
     
+    const idx = automodQueue.findIndex((m) => m.msgId === msgId);
+    if (idx >= 0) automodQueue.splice(idx, 1);
     return { success: true };
   } catch (err) {
     console.error('[AutoMod] Ошибка approve:', err);
+    sendAutoModLog('error', 'Ошибка approve', { msgId, error: err?.message || String(err) });
     throw err;
   }
 });
 
 ipcMain.handle('automod:deny', async (e, msgId) => {
   try {
+    log.info('[AutoMod] Deny', { msgId });
+    sendAutoModLog('info', 'Deny', { msgId });
     const userId = store.get('twitch.userId');
     const res = await helixFetch('https://api.twitch.tv/helix/moderation/automod/message', {
       method: 'POST',
@@ -1282,12 +1365,21 @@ ipcMain.handle('automod:deny', async (e, msgId) => {
     
     if (!res.ok) {
       const json = await res.json();
-      throw new Error(json.message || 'Не удалось отклонить');
+      const message = json.message || 'Не удалось отклонить';
+      if (message.includes('message-status attempted to update')) {
+        const idx = automodQueue.findIndex((m) => m.msgId === msgId);
+        if (idx >= 0) automodQueue.splice(idx, 1);
+        return { success: true, alreadyHandled: true };
+      }
+      throw new Error(message);
     }
     
+    const idx = automodQueue.findIndex((m) => m.msgId === msgId);
+    if (idx >= 0) automodQueue.splice(idx, 1);
     return { success: true };
   } catch (err) {
     console.error('[AutoMod] Ошибка deny:', err);
+    sendAutoModLog('error', 'Ошибка deny', { msgId, error: err?.message || String(err) });
     throw err;
   }
 });

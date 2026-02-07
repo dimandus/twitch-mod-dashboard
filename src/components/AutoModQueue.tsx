@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 
 export interface AutoModMessage {
   msgId: string;
@@ -19,19 +20,34 @@ const AutoModQueue: React.FC<AutoModQueueProps> = ({ onClose }) => {
   const [queue, setQueue] = useState<AutoModMessage[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const initialQueue = await window.electronAPI.automod.getQueue();
+        if (!cancelled && Array.isArray(initialQueue) && initialQueue.length > 0) {
+          setQueue(initialQueue);
+        }
+      } catch (err) {
+        logger.warn('[AutoMod] Не удалось загрузить очередь', err);
+      }
+    })();
+
     const unsubscribe = window.electronAPI.automod.onMessage((data: any) => {
-      console.log('[AutoMod] Получено сообщение:', data);
+      logger.info('[AutoMod] Raw payload', JSON.stringify(data));
+      logger.info('[AutoMod] Получено сообщение', data);
 
       try {
-        const msgId = data.content_classification?.msg_id;
-        const channel = data.channel_login || data.channel;
-        const userId = data.message?.sender?.user_id;
-        const userLogin = data.message?.sender?.login;
-        const message = data.message?.content?.text;
-        const reason = data.reason_code || 'unknown';
+        const payload = data?.data || data;
+        const msgId = payload?.id || payload?.content_classification?.msg_id || payload?.message?.id;
+        const channel = payload?.message?.channel_login || payload?.channel_login || payload?.channel;
+        const userId = payload?.message?.sender?.user_id;
+        const userLogin = payload?.message?.sender?.login;
+        const message = payload?.message?.content?.text || payload?.message?.content?.message || '';
+        const reason = payload?.reason_code || payload?.caught_message_reason?.reason || 'unknown';
 
         if (!msgId || !message) {
-          console.warn('[AutoMod] Неполные данные:', data);
+          logger.warn('[AutoMod] Неполные данные', { msgId, channel, userId, userLogin, reason });
           return;
         }
 
@@ -54,11 +70,12 @@ const AutoModQueue: React.FC<AutoModQueueProps> = ({ onClose }) => {
           return [...prev, automodMsg];
         });
       } catch (err) {
-        console.error('[AutoMod] Ошибка обработки:', err);
+        logger.error('[AutoMod] Ошибка обработки', err);
       }
     });
 
     return () => {
+      cancelled = true;
       if (unsubscribe) unsubscribe();
     };
   }, []);
@@ -66,6 +83,7 @@ const AutoModQueue: React.FC<AutoModQueueProps> = ({ onClose }) => {
   const handleApprove = async (msgId: string) => {
     try {
       await window.electronAPI.automod.approve(msgId);
+      logger.info('[AutoMod] Одобрено', { msgId });
       setQueue((prev) =>
         prev.map((m) =>
           m.msgId === msgId ? { ...m, status: 'approved' } : m
@@ -77,7 +95,7 @@ const AutoModQueue: React.FC<AutoModQueueProps> = ({ onClose }) => {
         setQueue((prev) => prev.filter((m) => m.msgId !== msgId));
       }, 2000);
     } catch (err) {
-      console.error('[AutoMod] Ошибка одобрения:', err);
+      logger.error('[AutoMod] Ошибка одобрения', err);
       alert('Не удалось одобрить сообщение');
     }
   };
@@ -85,6 +103,7 @@ const AutoModQueue: React.FC<AutoModQueueProps> = ({ onClose }) => {
   const handleDeny = async (msgId: string) => {
     try {
       await window.electronAPI.automod.deny(msgId);
+      logger.info('[AutoMod] Отклонено', { msgId });
       setQueue((prev) =>
         prev.map((m) =>
           m.msgId === msgId ? { ...m, status: 'denied' } : m
@@ -96,7 +115,7 @@ const AutoModQueue: React.FC<AutoModQueueProps> = ({ onClose }) => {
         setQueue((prev) => prev.filter((m) => m.msgId !== msgId));
       }, 2000);
     } catch (err) {
-      console.error('[AutoMod] Ошибка отклонения:', err);
+      logger.error('[AutoMod] Ошибка отклонения', err);
       alert('Не удалось отклонить сообщение');
     }
   };

@@ -24,9 +24,11 @@ export interface ElectronAPI {
   automod: {
     connect: (channelLogins: string[]) => Promise<{ success: boolean }>;
     disconnect: () => Promise<void>;
+    getQueue: () => Promise<Array<{ msgId: string; channel: string; userId: string; userLogin: string; message: string; reason: string; timestamp: number; status: 'pending' | 'approved' | 'denied' }>>;
     approve: (msgId: string) => Promise<{ success: boolean }>;
     deny: (msgId: string) => Promise<{ success: boolean }>;
     onMessage: (callback: (data: any) => void) => () => void;
+    onLog: (callback: (data: { level: 'info' | 'warn' | 'error' | 'debug'; message: string; data?: any; timestamp: number }) => void) => () => void;
   };
 
   twitch: {

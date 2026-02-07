@@ -19,12 +19,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   automod: {
     connect: (channelLogins) => ipcRenderer.invoke('automod:connect', channelLogins),
     disconnect: () => ipcRenderer.invoke('automod:disconnect'),
+    getQueue: () => ipcRenderer.invoke('automod:getQueue'),
     approve: (msgId) => ipcRenderer.invoke('automod:approve', msgId),
     deny: (msgId) => ipcRenderer.invoke('automod:deny', msgId),
     onMessage: (callback) => {
       const listener = (event, data) => callback(data);
       ipcRenderer.on('automod:message', listener);
       return () => ipcRenderer.removeListener('automod:message', listener);
+    },
+    onLog: (callback) => {
+      const listener = (event, data) => callback(data);
+      ipcRenderer.on('automod:log', listener);
+      return () => ipcRenderer.removeListener('automod:log', listener);
     }
   },
 
