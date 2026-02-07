@@ -134,6 +134,7 @@ interface TwitchAPI {
   getUsersInfo: (logins: string[]) => Promise<UserBasicInfo[]>;
   getUsersInfoById: (ids: string[]) => Promise<UserBasicInfoById[]>;
   getFollowedChannels: () => Promise<FollowedChannel[]>;
+  getFollowDate: (broadcasterLogin: string, userId: string) => Promise<string | null>;
   getGlobalBadges: () => Promise<any>;
   getChannelBadges?: (broadcasterId: string) => Promise<any>;
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useChatStore } from '../stores/chatStore';
 
 interface UserProfileModalProps {
   login: string;
@@ -22,6 +23,8 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ login, onClose }) =
   const [data, setData] = useState<TwitchUserDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [followDate, setFollowDate] = useState<string | null>(null);
+  const selectedChannel = useChatStore((s) => s.selectedChannel);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +48,32 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ login, onClose }) =
     };
   }, [login]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFollowDate = async () => {
+      if (!data?.id || !selectedChannel) {
+        if (!cancelled) setFollowDate(null);
+        return;
+      }
+
+      try {
+        const followedAt = await window.electronAPI.twitch.getFollowDate(
+          selectedChannel,
+          data.id
+        );
+        if (!cancelled) setFollowDate(followedAt || null);
+      } catch {
+        if (!cancelled) setFollowDate(null);
+      }
+    };
+
+    loadFollowDate();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.id, selectedChannel]);
+
   const openOnTwitch = () => {
     const url = `https://twitch.tv/${data?.login || login}`;
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -55,6 +84,9 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ login, onClose }) =
     : '';
 
   const viewCount = data ? data.view_count.toLocaleString('ru-RU') : '';
+  const followDateText = followDate
+    ? new Date(followDate).toLocaleDateString('ru-RU')
+    : 'Недоступно (нужны права модератора)';
 
   return (
     <div style={overlayStyle} onClick={onClose}>
@@ -138,6 +170,10 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ login, onClose }) =
                 <div style={rowStyle}>
                   <span style={labelStyle}>Создан:</span>
                   <span style={valueStyle}>{createdAt}</span>
+                </div>
+                <div style={rowStyle}>
+                  <span style={labelStyle}>Отслеживает с:</span>
+                  <span style={valueStyle}>{followDateText}</span>
                 </div>
                 <div style={rowStyle}>
                   <span style={labelStyle}>Просмотры канала:</span>

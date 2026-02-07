@@ -346,6 +346,7 @@ const TWITCH_SCOPES = [
   'moderator:read:chatters',
   'user:read:moderated_channels',
   'user:read:follows',
+  'moderator:read:followers',
   'user:write:chat',
   'user:read:emotes',
   'moderator:manage:automod',
@@ -678,6 +679,36 @@ async function fetchFollowedChannelsHelix() {
     cursor = json.pagination?.cursor;
   } while (cursor);
   return allChannels;
+}
+
+async function fetchFollowDateHelix(broadcasterLogin, userId) {
+  try {
+    const bid = await getBroadcasterIdByLogin(broadcasterLogin);
+    if (!bid || !userId) return null;
+
+    const url = new URL('https://api.twitch.tv/helix/channels/followers');
+    url.searchParams.set('broadcaster_id', bid);
+    url.searchParams.set('user_id', String(userId));
+
+    const accessToken = store.get('twitch.accessToken');
+    const clientId = getHelixClientId();
+    if (!accessToken || !clientId) return null;
+
+    const res = await nodeFetch(url.toString(), {
+      headers: {
+        'Client-Id': clientId,
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (res.status === 401 || res.status === 403) return null;
+    const json = await res.json();
+    if (!res.ok) return null;
+    const entry = json?.data?.[0];
+    return entry?.followed_at || null;
+  } catch (err) {
+    return null;
+  }
 }
 
 async function fetchChannelsLiveStatusHelix(logins) {
@@ -1135,6 +1166,9 @@ ipcMain.handle('twitch:getUsersInfoById', (e, ids) =>
 );
 ipcMain.handle('twitch:getFollowedChannels', () =>
   fetchFollowedChannelsHelix()
+);
+ipcMain.handle('twitch:getFollowDate', (e, broadcasterLogin, userId) =>
+  fetchFollowDateHelix(broadcasterLogin, userId)
 );
 
 ipcMain.handle('twitch:banUser', (e, ch, u, d, r) => banUserHelix(ch, u, d, r));

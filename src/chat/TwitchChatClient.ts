@@ -369,15 +369,6 @@ export class TwitchChatClient {
     }
     this.client = null;
     this.joinedChannels.clear();
-    this.messageHandlers.clear();
-    this.deleteHandlers.clear();
-    this.clearHandlers.clear();
-    this.roomStateHandlers.clear();
-    this.noticeHandlers.clear();
-    this.authErrorHandlers.clear();
-    this.banHandlers.clear();
-    this.timeoutHandlers.clear();
-    this.modActionHandlers.clear();
     logger.info('[TMI] disconnected');
   }
 

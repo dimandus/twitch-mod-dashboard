@@ -142,6 +142,17 @@ const SettingsView: React.FC = () => {
     }
   };
 
+  const refreshScopes = async () => {
+    try {
+      const scopes = await window.electronAPI.config.get('twitch.scopes');
+      if (Array.isArray(scopes)) setCurrentScopes(scopes);
+      else setCurrentScopes([]);
+      showMessage('Список прав обновлен', 'success');
+    } catch (err: any) {
+      showMessage(err?.message || 'Ошибка обновления прав', 'error');
+    }
+  };
+
   const handleLogin = async () => {
     if (!clientId.trim() || !clientSecret.trim()) {
       showMessage('Сначала введите и сохраните Client ID и Client Secret', 'error');
@@ -238,6 +249,7 @@ const SettingsView: React.FC = () => {
           onLogin={handleLogin}
           onLoginViaDimandus={handleLoginViaDimandus}
           onLogout={handleLogout}
+          onRefreshScopes={refreshScopes}
         />
       )}
 
@@ -297,7 +309,9 @@ const SettingsView: React.FC = () => {
 const getContainerStyle = (textColor: string): React.CSSProperties => ({
   padding: 24,
   maxWidth: 700,
-  color: textColor
+  color: textColor,
+  height: '100%',
+  overflowY: 'auto'
 });
 
 const tabsContainerStyle: React.CSSProperties = {

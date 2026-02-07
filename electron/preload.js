@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('twitch:getUsersInfoById', ids),
     getFollowedChannels: () =>
       ipcRenderer.invoke('twitch:getFollowedChannels'),
+    getFollowDate: (broadcasterLogin, userId) =>
+      ipcRenderer.invoke('twitch:getFollowDate', broadcasterLogin, userId),
 
     // Бейджи
     getGlobalBadges: () =>

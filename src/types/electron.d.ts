@@ -42,7 +42,9 @@ export interface ElectronAPI {
     getModeratedChannels: () => Promise<any[]>;
     getChannelsLiveStatus: (logins: string[]) => Promise<any[]>;
     getUsersInfo: (logins: string[]) => Promise<any[]>;
+    getUsersInfoById: (ids: string[]) => Promise<any[]>;
     getFollowedChannels: () => Promise<any[]>;
+    getFollowDate: (broadcasterLogin: string, userId: string) => Promise<string | null>;
     
     getGlobalBadges: () => Promise<any>;
     getChannelBadges: (broadcasterId: string) => Promise<any>;

@@ -11,6 +11,7 @@ const REQUIRED_SCOPES = [
   'moderator:manage:shield_mode',
   'moderator:read:shield_mode',
   'moderator:read:chatters',
+  'moderator:read:followers',
   'user:read:moderated_channels',
   'user:read:follows',
   'user:write:chat',
@@ -33,6 +34,7 @@ interface AuthTabProps {
   onLogin: () => void;
   onLoginViaDimandus: () => void;
   onLogout: () => void;
+  onRefreshScopes: () => void;
 }
 
 export const AuthTab: React.FC<AuthTabProps> = ({
@@ -47,7 +49,8 @@ export const AuthTab: React.FC<AuthTabProps> = ({
   onSaveCreds,
   onLogin,
   onLoginViaDimandus,
-  onLogout
+  onLogout,
+  onRefreshScopes
 }) => {
   const missingScopes = REQUIRED_SCOPES.filter((scope) => !currentScopes.includes(scope));
   const hasModerationScopes = [
@@ -164,7 +167,34 @@ export const AuthTab: React.FC<AuthTabProps> = ({
               Текущие права ({currentScopes.length}):
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {currentScopes.map((scope) => (
+                <span
+                  key={scope}
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    fontSize: 11,
+                    background: '#1f2937',
+                    color: '#e5e7eb',
+                    border: '1px solid #374151'
+                  }}
+                >
+                  {scope}
+                </span>
+              ))}
+              {currentScopes.length === 0 && (
+                <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                  Нет данных о правах
+                </span>
+              )}
+            </div>
+
+            <button onClick={onRefreshScopes} style={buttonSecondaryStyle}>
+              ↻ Обновить список прав
+            </button>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
               {REQUIRED_SCOPES.map((scope) => {
                 const hasScope = currentScopes.includes(scope);
                 return (
