@@ -97,10 +97,6 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
         const selfLogin = currentUserLoginRef.current;
         const mentionedSelf = !!selfLogin && message.toLowerCase().includes('@' + selfLogin);
         
-        if (mentionedSelf && selfLogin && tags.username?.toLowerCase() !== selfLogin.toLowerCase() && !self) {
-          addSystemMessage(chanLower, `@${tags.username || tags['display-name'] || 'пользователь'} упомянул вас`);
-        }
-
         const msg = buildChatMessage(channel, message, tags, self, mentionedSelf);
         const loginLower = (tags.username || '').toLowerCase();
         const odaterId = tags['user-id'] || loginLower;
