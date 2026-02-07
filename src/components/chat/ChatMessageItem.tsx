@@ -79,28 +79,25 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
         borderRadius: 4,
         padding: '2px 4px',
         margin: '0 0 4px 0',
-        display: 'flex',
-        alignItems: 'baseline',
-        gap: 4,
+        display: 'block',
         opacity: isDeleted ? 0.7 : isCleared ? 0.6 : 1,
         cursor: 'context-menu',
         textDecoration: 'none',
         boxShadow: isFirstMessage ? '0 0 0 1px var(--color-chatMessageFirst)' : 'none',
         zIndex: isFirstMessage ? 1 : 'auto',
-        flexWrap: 'wrap',
         wordBreak: 'break-word',
         overflowWrap: 'break-word',
         position: 'relative'
       }}
     >
-      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+      <span style={{ display: 'inline-flex', gap: 2, marginRight: 4, alignItems: 'baseline' }}>
         <Badges
           badges={m.badges}
           badgeVersions={m.badgeVersions}
           badgeInfo={m.badgeInfo}
           badgeSets={badgeSets}
         />
-      </div>
+      </span>
       <span
         style={{
           fontWeight: 600,
@@ -111,8 +108,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
             ? 'var(--color-textMuted)'
             : m.color || 'var(--color-text)',
           marginRight: 4,
-          textDecoration: 'none',
-          flexShrink: 0
+          textDecoration: 'none'
         }}
       >
         {m.displayName || m.userLogin}:
@@ -126,7 +122,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
             padding: '1px 4px',
             borderRadius: 3,
             fontWeight: 600,
-            marginRight: 4
+            marginRight: 4,
+            display: 'inline-block'
           }}
           title={`Сообщение из другого канала коллаборации${m.sourceChannelName ? `: ${m.sourceChannelName}` : ''}`}
         >
@@ -139,9 +136,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
           color: isDeleted ? 'var(--color-textSecondary)' : isCleared ? 'var(--color-textMuted)' : 'var(--color-text)',
           textDecoration: isDeleted ? 'line-through' : 'none',
           wordBreak: 'break-word',
-          overflowWrap: 'break-word',
-          flex: 1,
-          minWidth: 0
+          overflowWrap: 'break-word'
         }}
       >
         <MessageWithEmotes text={m.text} emotes={m.emotes} />
@@ -151,10 +146,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
           style={{
             fontSize: 10,
             color: 'var(--color-error)',
-            marginLeft: 'auto',
-            flexShrink: 0,
+            marginLeft: 6,
             fontStyle: 'italic',
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            whiteSpace: 'nowrap'
           }}
         >
           [удалено]
@@ -164,8 +159,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
         <span
           style={{
             fontSize: 14,
-            marginLeft: 'auto',
-            flexShrink: 0
+            marginLeft: 6,
+            whiteSpace: 'nowrap'
           }}
           title="Сообщение соответствует триггеру автомодерации"
         >
