@@ -239,8 +239,40 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Размер:</span>
             <button onClick={() => ui.changePaneWidth(-20)} style={styles.sizeButtonStyle}>W-</button>
+            <input
+              type="number"
+              defaultValue={ui.paneWidth}
+              onBlur={e => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v)) ui.setPaneWidth(v);
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const v = parseInt((e.target as HTMLInputElement).value, 10);
+                  if (!isNaN(v)) ui.setPaneWidth(v);
+                }
+              }}
+              style={{ width: 48, fontSize: 11 * textScale, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--color-border)' }}
+              title="Ширина чата"
+            />
             <button onClick={() => ui.changePaneWidth(20)} style={styles.sizeButtonStyle}>W+</button>
             <button onClick={() => ui.changePaneHeight(-20)} style={styles.sizeButtonStyle}>H-</button>
+            <input
+              type="number"
+              defaultValue={ui.paneHeight}
+              onBlur={e => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v)) ui.setPaneHeight(v);
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const v = parseInt((e.target as HTMLInputElement).value, 10);
+                  if (!isNaN(v)) ui.setPaneHeight(v);
+                }
+              }}
+              style={{ width: 48, fontSize: 11 * textScale, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--color-border)' }}
+              title="Высота чата"
+            />
             <button onClick={() => ui.changePaneHeight(20)} style={styles.sizeButtonStyle}>H+</button>
             <button onClick={() => { ui.setPaneWidth(320); ui.setPaneHeight(260); }} style={styles.sizeButtonStyle} title="Сброс">⭮</button>
           </div>
