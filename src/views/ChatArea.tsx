@@ -299,7 +299,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             <button onClick={() => ui.changePaneWidth(-20)} style={styles.sizeButtonStyle}>W-</button>
             <input
               type="number"
-              defaultValue={ui.paneWidth}
+              value={ui.paneWidth}
+              onChange={e => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v)) ui.setPaneWidth(v);
+              }}
               onBlur={e => {
                 const v = parseInt(e.target.value, 10);
                 if (!isNaN(v)) ui.setPaneWidth(v);
@@ -310,14 +314,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   if (!isNaN(v)) ui.setPaneWidth(v);
                 }
               }}
-              style={{ width: 48, fontSize: 11 * textScale, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--color-border)' }}
+              style={{
+                width: Math.max(48, Math.round(48 * textScale)),
+                fontSize: 11 * textScale,
+                padding: '2px 4px',
+                borderRadius: 4,
+                border: '1px solid var(--color-border)',
+                textAlign: 'center'
+              }}
               title="Ширина чата"
             />
             <button onClick={() => ui.changePaneWidth(20)} style={styles.sizeButtonStyle}>W+</button>
             <button onClick={() => ui.changePaneHeight(-20)} style={styles.sizeButtonStyle}>H-</button>
             <input
               type="number"
-              defaultValue={ui.paneHeight}
+              value={ui.paneHeight}
+              onChange={e => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v)) ui.setPaneHeight(v);
+              }}
               onBlur={e => {
                 const v = parseInt(e.target.value, 10);
                 if (!isNaN(v)) ui.setPaneHeight(v);
@@ -328,7 +343,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   if (!isNaN(v)) ui.setPaneHeight(v);
                 }
               }}
-              style={{ width: 48, fontSize: 11 * textScale, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--color-border)' }}
+              style={{
+                width: Math.max(48, Math.round(48 * textScale)),
+                fontSize: 11 * textScale,
+                padding: '2px 4px',
+                borderRadius: 4,
+                border: '1px solid var(--color-border)',
+                textAlign: 'center'
+              }}
               title="Высота чата"
             />
             <button onClick={() => ui.changePaneHeight(20)} style={styles.sizeButtonStyle}>H+</button>
