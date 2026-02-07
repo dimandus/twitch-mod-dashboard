@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { clampWidth, clampHeight, clampAutoScale } from '../utils/chatHelpers';
+import { clampWidth, clampHeight, clampAutoScale, clampLineHeight, clampMessageSpacing } from '../utils/chatHelpers';
 import { logger } from '../utils/logger';
 import type { ChatMessage } from '../types/chat';
 
@@ -8,6 +8,8 @@ export const useChatAreaUI = () => {
   const [paneWidth, setPaneWidth] = useState(320);
   const [paneHeight, setPaneHeight] = useState(260);
   const [autoScale, setAutoScale] = useState(1);
+  const [lineHeightScale, setLineHeightScale] = useState(1.2);
+  const [messageSpacing, setMessageSpacing] = useState(4); // px, default 4
   
   const isInitialMount = useRef(true);
   
@@ -84,15 +86,19 @@ export const useChatAreaUI = () => {
   useEffect(() => {
     (async () => {
       try {
-        const [storedRows, storedWidth, storedHeight] = await Promise.all([
+        const [storedRows, storedWidth, storedHeight, storedLineHeight, storedMessageSpacing] = await Promise.all([
           window.electronAPI.config.get('ui.chat.rows'),
           window.electronAPI.config.get('ui.chat.paneWidth'),
-          window.electronAPI.config.get('ui.chat.paneHeight')
+          window.electronAPI.config.get('ui.chat.paneHeight'),
+          window.electronAPI.config.get('ui.chat.lineHeightScale'),
+          window.electronAPI.config.get('ui.chat.messageSpacing')
         ]);
-        console.log('[useChatAreaUI] Загружены настройки:', { storedRows, storedWidth, storedHeight });
+        console.log('[useChatAreaUI] Загружены настройки:', { storedRows, storedWidth, storedHeight, storedLineHeight, storedMessageSpacing });
         if (storedRows === 1 || storedRows === 2) setRows(storedRows);
         if (typeof storedWidth === 'number') setPaneWidth(clampWidth(storedWidth));
         if (typeof storedHeight === 'number') setPaneHeight(clampHeight(storedHeight));
+        if (typeof storedLineHeight === 'number') setLineHeightScale(clampLineHeight(storedLineHeight));
+        if (typeof storedMessageSpacing === 'number') setMessageSpacing(clampMessageSpacing(storedMessageSpacing));
         isInitialMount.current = false;
       } catch (err) {
         console.warn('[useChatAreaUI] не удалось загрузить настройки', err);
@@ -109,13 +115,15 @@ export const useChatAreaUI = () => {
         await Promise.all([
           window.electronAPI.config.set('ui.chat.rows', rows),
           window.electronAPI.config.set('ui.chat.paneWidth', paneWidth),
-          window.electronAPI.config.set('ui.chat.paneHeight', paneHeight)
+          window.electronAPI.config.set('ui.chat.paneHeight', paneHeight),
+          window.electronAPI.config.set('ui.chat.lineHeightScale', lineHeightScale),
+          window.electronAPI.config.set('ui.chat.messageSpacing', messageSpacing)
         ]);
       } catch (err) {
         console.warn('[useChatAreaUI] не удалось сохранить настройки', err);
       }
     })();
-  }, [rows, paneWidth, paneHeight]);
+  }, [rows, paneWidth, paneHeight, lineHeightScale]);
 
   // Закрытие меню при клике
   useEffect(() => {
@@ -141,6 +149,10 @@ export const useChatAreaUI = () => {
 
   const changePaneWidth = (delta: number) => setPaneWidth((w) => clampWidth(w + delta));
   const changePaneHeight = (delta: number) => setPaneHeight((h) => clampHeight(h + delta));
+  const changeLineHeightScale = (delta: number) =>
+    setLineHeightScale((value) => clampLineHeight(value + delta));
+  const changeMessageSpacing = (delta: number) =>
+    setMessageSpacing((value) => clampMessageSpacing(value + delta));
 
   return {
     rows,
@@ -149,6 +161,12 @@ export const useChatAreaUI = () => {
     paneHeight,
     changePaneWidth,
     changePaneHeight,
+    lineHeightScale,
+    setLineHeightScale: (value: number) => setLineHeightScale(clampLineHeight(value)),
+    changeLineHeightScale,
+    messageSpacing,
+    setMessageSpacing: (value: number) => setMessageSpacing(clampMessageSpacing(value)),
+    changeMessageSpacing,
     autoScale,
     hoveredPaneId,
     setHoveredPaneId,

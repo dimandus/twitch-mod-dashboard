@@ -1,18 +1,25 @@
+export function clampMessageSpacing(value: number): number {
+  if (Number.isNaN(value)) return 4;
+  return value;
+}
 // Утилиты для чата
 
 export function clampWidth(w: number): number {
-  return Math.min(600, Math.max(220, w));
+  return w;
 }
 
 export function clampHeight(h: number): number {
-  return Math.min(600, Math.max(180, h));
+  return h;
 }
 
 export function clampAutoScale(value: number): number {
-  const min = 0.7;
-  const max = 1.5;
   if (Number.isNaN(value)) return 1;
-  return Math.min(max, Math.max(min, value));
+  return value;
+}
+
+export function clampLineHeight(value: number): number {
+  if (Number.isNaN(value)) return 1.2;
+  return value;
 }
 
 export function formatFollowersDuration(minutes: number): string {

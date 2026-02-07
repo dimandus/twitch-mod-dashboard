@@ -8,15 +8,19 @@ import { checkAutoModTriggers } from '../../utils/autoModHelpers';
 interface ChatMessageItemProps {
   message: ChatMessage;
   textScale: number;
+  lineHeight: number;
   badgeSets: Record<string, Record<string, any>>;
   onContextMenu: (e: React.MouseEvent) => void;
+  messageSpacing?: number; // px, optional
 }
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   message: m,
   textScale,
+  lineHeight,
   badgeSets,
-  onContextMenu
+  onContextMenu,
+  messageSpacing = 4
 }) => {
   const { enabled: autoModEnabled, triggers } = useAutoModerationStore();
   
@@ -78,7 +82,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
         border: getMessageBorder(),
         borderRadius: 4,
         padding: '2px 4px',
-        margin: '0 0 4px 0',
+        margin: `0 0 ${messageSpacing}px 0`,
         display: 'block',
         opacity: isDeleted ? 0.7 : isCleared ? 0.6 : 1,
         cursor: 'context-menu',
@@ -134,6 +138,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
       <span
         style={{
           fontSize: 12 * textScale,
+          lineHeight: `${lineHeight}px`,
           color: isDeleted ? 'var(--color-textSecondary)' : isCleared ? 'var(--color-textMuted)' : 'var(--color-text)',
           textDecoration: isDeleted ? 'line-through' : 'none',
           wordBreak: 'break-word',

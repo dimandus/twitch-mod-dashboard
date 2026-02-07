@@ -10,6 +10,7 @@ interface ChatPaneProps {
   pane: ChatPaneType;
   modes: ChatModes;
   textScale: number;
+  lineHeight: number;
   scaledWidth: number;
   scaledHeight: number;
   isDragging: boolean;
@@ -53,6 +54,7 @@ interface ChatPaneProps {
   // Drag & Drop
   onDragStart: (e: React.DragEvent, paneId: string) => void;
   onDragOver: (e: React.DragEvent) => void;
+  messageSpacing?: number; // Added messageSpacing prop
   onDrop: (e: React.DragEvent, paneId: string) => void;
   onDragEnd: () => void;
   
@@ -64,6 +66,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   pane,
   modes,
   textScale,
+  lineHeight,
   scaledWidth,
   scaledHeight,
   isDragging,
@@ -97,6 +100,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   onCommandApply,
   setInputRef,
   setHoveredPaneId,
+  messageSpacing = 4, // Default value for messageSpacing
   onDragStart,
   onDragOver,
   onDrop,
@@ -200,6 +204,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             <ChatMessageItem
               message={m}
               textScale={textScale}
+              lineHeight={lineHeight}
               badgeSets={badgeSets}
               onContextMenu={(e) => onMessageContextMenu(e, pane.channel, m)}
             />

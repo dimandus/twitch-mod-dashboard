@@ -194,6 +194,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const isTwoRows = ui.rows === 2;
   const combinedScale = globalScale * ui.autoScale;
   const textScale = fontScale * combinedScale;
+  const lineHeight = 12 * textScale * ui.lineHeightScale;
   const scaledPaneWidth = ui.paneWidth * combinedScale;
   const scaledPaneHeight = ui.paneHeight * combinedScale;
 
@@ -241,18 +242,34 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             <button onClick={() => ui.changePaneWidth(20)} style={styles.sizeButtonStyle}>W+</button>
             <button onClick={() => ui.changePaneHeight(-20)} style={styles.sizeButtonStyle}>H-</button>
             <button onClick={() => ui.changePaneHeight(20)} style={styles.sizeButtonStyle}>H+</button>
+            <button onClick={() => { ui.setPaneWidth(320); ui.setPaneHeight(260); }} style={styles.sizeButtonStyle} title="Сброс">⭮</button>
           </div>
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Шрифт:</span>
             <button onClick={() => onFontScaleChange(fontScale - 0.1)} style={styles.sizeButtonStyle}>A-</button>
             <button onClick={() => onFontScaleChange(fontScale + 0.1)} style={styles.sizeButtonStyle}>A+</button>
+            <button onClick={() => onFontScaleChange(1)} style={styles.sizeButtonStyle} title="Сброс">⭮</button>
           </div>
 
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Scale:</span>
             <button onClick={() => onGlobalScaleChange(globalScale - 0.1)} style={styles.sizeButtonStyle}>S-</button>
             <button onClick={() => onGlobalScaleChange(globalScale + 0.1)} style={styles.sizeButtonStyle}>S+</button>
+            <button onClick={() => onGlobalScaleChange(1)} style={styles.sizeButtonStyle} title="Сброс">⭮</button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Интервал:</span>
+            <button onClick={() => ui.changeLineHeightScale(-0.1)} style={styles.sizeButtonStyle}>L-</button>
+            <button onClick={() => ui.changeLineHeightScale(0.1)} style={styles.sizeButtonStyle}>L+</button>
+            <button onClick={() => ui.setLineHeightScale(1.2)} style={styles.sizeButtonStyle} title="Сброс">⭮</button>
+          </div>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)' }}>Отступ:</span>
+            <button onClick={() => ui.changeMessageSpacing(-1)} style={styles.sizeButtonStyle}>M-</button>
+            <button onClick={() => ui.changeMessageSpacing(1)} style={styles.sizeButtonStyle}>M+</button>
+            <button onClick={() => ui.setMessageSpacing(4)} style={styles.sizeButtonStyle} title="Сброс">⭮</button>
           </div>
         </div>
       </div>
@@ -341,8 +358,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                       <ChatMessageItem
                         message={m}
                         textScale={textScale}
+                        lineHeight={lineHeight}
                         badgeSets={ui.badgeSets}
                         onContextMenu={(e) => moderation.handleMessageContextMenu(e, pane.channel, m)}
+                        messageSpacing={ui.messageSpacing}
                       />
                     </div>
                   )}
