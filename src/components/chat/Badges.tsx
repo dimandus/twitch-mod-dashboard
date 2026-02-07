@@ -6,10 +6,15 @@ interface BadgesProps {
   badgeVersions?: Record<string, string>;
   badgeInfo?: Record<string, string>;
   badgeSets?: Record<string, Record<string, any>>;
+  textScale?: number;
 }
 
-export const Badges: React.FC<BadgesProps> = ({ badges, badgeVersions, badgeInfo, badgeSets }) => {
+export const Badges: React.FC<BadgesProps> = ({ badges, badgeVersions, badgeInfo, badgeSets, textScale = 1 }) => {
   if (!badges.length) return null;
+
+  const imageSize = 18 * textScale;
+  const labelHeight = 14 * textScale;
+  const labelFontSize = 9 * textScale;
 
   if (badgeSets && Object.keys(badgeSets).length > 0) {
     return (
@@ -36,8 +41,8 @@ export const Badges: React.FC<BadgesProps> = ({ badges, badgeVersions, badgeInfo
               alt={setId}
               title={title}
               style={{
-                width: 18,
-                height: 18,
+                width: imageSize,
+                height: imageSize,
                 marginRight: 2,
                 flexShrink: 0
               }}
@@ -72,11 +77,11 @@ export const Badges: React.FC<BadgesProps> = ({ badges, badgeVersions, badgeInfo
             key={setId + i}
             title={title}
             style={{
-              minWidth: 14,
-              height: 14,
+                minWidth: labelHeight,
+                height: labelHeight,
               borderRadius: 4,
-              fontSize: 9,
-              lineHeight: '14px',
+                fontSize: labelFontSize,
+                lineHeight: `${labelHeight}px`,
               textAlign: 'center',
               background: info.color,
               color: 'var(--color-chatBackground)',

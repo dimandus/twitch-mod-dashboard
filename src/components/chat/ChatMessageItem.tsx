@@ -96,6 +96,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
           badgeVersions={m.badgeVersions}
           badgeInfo={m.badgeInfo}
           badgeSets={badgeSets}
+          textScale={textScale}
         />
       </span>
       <span
