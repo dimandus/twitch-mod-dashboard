@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { ChatMessageItem } from '../components/chat/ChatMessageItem';
 import { ChatModesBar } from '../components/chat/ChatModesBar';
@@ -255,6 +255,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const lineHeight = 12 * textScale * ui.lineHeightScale;
   const scaledPaneWidth = ui.paneWidth * combinedScale;
   const scaledPaneHeight = ui.paneHeight * combinedScale;
+  const emoteUsageSnapshot = useMemo(
+    () => (chatEmotes.emotePicker ? { ...chatEmotes.emoteUsage } : {}),
+    [chatEmotes.emotePicker?.openedAt]
+  );
 
   return (
     <section
@@ -504,11 +508,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   <EmotePicker
                     paneId={pane.id}
                     tab={chatEmotes.emotePicker.tab}
-                    onTabChange={(tab) => chatEmotes.setEmotePicker(prev => prev ? {...prev, tab} : null)}
+                    onTabChange={(tab) => chatEmotes.setEmotePicker(prev => prev ? { ...prev, tab } : null)}
                     globalEmotes={chatEmotes.globalEmotes}
                     userEmotes={chatEmotes.userEmotes}
                     channelEmotes={chatEmotes.channelEmotes[pane.channel.toLowerCase()] || []}
-                    emoteUsage={chatEmotes.emoteUsage}
+                    usageSnapshot={emoteUsageSnapshot}
                     onEmoteSelect={(code) => insertEmoteToInput(pane.id, code)}
                     textScale={textScale}
                   />
@@ -529,7 +533,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      chatEmotes.setEmotePicker((prev) => prev && prev.paneId === pane.id ? null : { paneId: pane.id, tab: 'channel' });
+                      chatEmotes.setEmotePicker((prev) => prev && prev.paneId === pane.id ? null : { paneId: pane.id, tab: 'channel', openedAt: Date.now() });
                     }}
                     style={styles.emojiButtonStyle}
                     title="Вставить эмодзи"

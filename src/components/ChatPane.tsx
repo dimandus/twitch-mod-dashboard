@@ -26,7 +26,7 @@ interface ChatPaneProps {
   globalEmotes: Emote[];
   userEmotes: Emote[];
   channelEmotes: Record<string, Emote[]>;
-  emoteUsage: Record<string, number>;
+  emoteUsageSnapshot: Record<string, number>;
   
   // Autocomplete
   mentionState: any;
@@ -80,7 +80,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   globalEmotes,
   userEmotes,
   channelEmotes,
-  emoteUsage,
+  emoteUsageSnapshot,
   mentionState,
   commandState,
   onSelectChannel,
@@ -243,7 +243,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           globalEmotes={globalEmotes}
           userEmotes={userEmotes}
           channelEmotes={channelEmotes[pane.channel.toLowerCase()] || []}
-          emoteUsage={emoteUsage}
+          usageSnapshot={emoteUsageSnapshot}
           onEmoteSelect={(code) => onEmoteSelect(pane.id, code)}
           textScale={textScale}
         />

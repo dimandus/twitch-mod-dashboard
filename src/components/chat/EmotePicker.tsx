@@ -10,6 +10,8 @@ export interface Emote {
   url4x: string;
   source: EmoteSource;
   ownerName?: string;
+  ownerId?: string;
+  emoteType?: string;
 }
 
 interface EmotePickerProps {
@@ -19,7 +21,7 @@ interface EmotePickerProps {
   globalEmotes: Emote[];
   userEmotes: Emote[];
   channelEmotes: Emote[];
-  emoteUsage: Record<string, number>;
+  usageSnapshot: Record<string, number>;
   onEmoteSelect: (code: string) => void;
   textScale: number;
 }
@@ -30,7 +32,7 @@ export const EmotePicker: React.FC<EmotePickerProps> = ({
   globalEmotes,
   userEmotes,
   channelEmotes,
-  emoteUsage,
+  usageSnapshot,
   onEmoteSelect,
   textScale
 }) => {
@@ -39,12 +41,19 @@ export const EmotePicker: React.FC<EmotePickerProps> = ({
   else if (tab === 'user') list = userEmotes;
   else if (tab === 'global') list = globalEmotes;
 
-  const sorted = [...list].sort((a, b) => {
-    const ua = emoteUsage[a.name] || 0;
-    const ub = emoteUsage[b.name] || 0;
-    if (ua !== ub) return ub - ua;
-    return a.name.localeCompare(b.name);
-  });
+  const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
+
+  const groups = new Map<string, { label: string; items: Emote[]; usage: number }>();
+  if (tab === 'user') {
+    for (const e of sorted) {
+      const key = e.ownerName || e.ownerId || 'unknown';
+      const label = e.ownerName ? e.ownerName : e.ownerId ? `ID: ${e.ownerId}` : 'Без владельца';
+      const bucket = groups.get(key) || { label, items: [], usage: 0 };
+      bucket.items.push(e);
+      bucket.usage += usageSnapshot[e.name] || 0;
+      groups.set(key, bucket);
+    }
+  }
 
   return (
     <div
@@ -93,13 +102,70 @@ export const EmotePicker: React.FC<EmotePickerProps> = ({
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-        {!list.length ? (
-          <div style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)', padding: 4 }}>
-            Нет эмотов для этой вкладки.
-          </div>
-        ) : (
-          sorted.map((e) => (
+      {!list.length ? (
+        <div style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)', padding: 4 }}>
+          Нет эмотов для этой вкладки.
+        </div>
+      ) : tab === 'user' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {Array.from(groups.entries())
+            .sort(([, a], [, b]) => {
+              const aUnknown = a.label === 'Без владельца';
+              const bUnknown = b.label === 'Без владельца';
+              if (aUnknown && !bUnknown) return 1;
+              if (!aUnknown && bUnknown) return -1;
+              const diff = b.usage - a.usage;
+              if (Math.abs(diff) >= 5) return diff;
+              return a.label.localeCompare(b.label);
+            })
+            .map(([key, group], idx) => (
+            <div
+              key={key}
+              style={{
+                paddingTop: idx === 0 ? 0 : 6,
+                borderTop: idx === 0 ? 'none' : '1px solid var(--color-border)'
+              }}
+            >
+              <div style={{ fontSize: 11 * textScale, color: 'var(--color-textSecondary)', margin: '0 0 4px 2px' }}>
+                {group.label}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {group.items.map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      onEmoteSelect(e.name);
+                    }}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 4,
+                      border: 'none',
+                      background: 'var(--color-modInactive)',
+                      padding: 2,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    title={e.ownerName ? `${e.name} (${e.ownerName})` : e.name}
+                  >
+                    <img
+                      src={e.url1x}
+                      alt={e.name}
+                      style={{ width: 24, height: 24 }}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {sorted.map((e) => (
             <button
               key={e.id}
               type="button"
@@ -127,9 +193,9 @@ export const EmotePicker: React.FC<EmotePickerProps> = ({
                 style={{ width: 24, height: 24 }}
               />
             </button>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

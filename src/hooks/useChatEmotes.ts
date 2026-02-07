@@ -6,7 +6,7 @@ export const useChatEmotes = (chatPanes: any[]) => {
   const [globalEmotes, setGlobalEmotes] = useState<Emote[]>([]);
   const [userEmotes, setUserEmotes] = useState<Emote[]>([]);
   const [channelEmotes, setChannelEmotes] = useState<Record<string, Emote[]>>({});
-  const [emotePicker, setEmotePicker] = useState<{ paneId: string; tab: EmoteSource } | null>(null);
+  const [emotePicker, setEmotePicker] = useState<{ paneId: string; tab: EmoteSource; openedAt: number } | null>(null);
   const [emoteUsage, setEmoteUsage] = useState<Record<string, number>>({});
 
   // Загрузка глобальных и пользовательских эмотов
@@ -25,7 +25,9 @@ export const useChatEmotes = (chatPanes: any[]) => {
                 url2x: urls.url2x,
                 url4x: urls.url4x,
                 source: 'global',
-                ownerName: e.owner_name
+                ownerName: e.owner_name,
+                ownerId: e.owner_id,
+                emoteType: e.emote_type
               } as Emote;
             })
           );
@@ -43,7 +45,9 @@ export const useChatEmotes = (chatPanes: any[]) => {
                 url2x: urls.url2x,
                 url4x: urls.url4x,
                 source: 'user',
-                ownerName: e.owner_name
+                ownerName: e.owner_name,
+                ownerId: e.owner_id,
+                emoteType: e.emote_type
               } as Emote;
             })
           );
@@ -74,7 +78,9 @@ export const useChatEmotes = (chatPanes: any[]) => {
               url2x: urls.url2x,
               url4x: urls.url4x,
               source: 'channel',
-              ownerName: e.owner_name
+              ownerName: e.owner_name,
+              ownerId: e.owner_id,
+              emoteType: e.emote_type
             } as Emote;
           });
 
