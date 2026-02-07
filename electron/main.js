@@ -784,6 +784,32 @@ async function fetchUsersInfoHelix(logins) {
   return result;
 }
 
+async function fetchUsersInfoByIdHelix(ids) {
+  const cleanIds = Array.from(
+    new Set((ids || []).map((id) => String(id).trim()).filter(Boolean))
+  );
+  if (!cleanIds.length) return [];
+  const result = [];
+  for (let i = 0; i < cleanIds.length; i += 100) {
+    const url = new URL('https://api.twitch.tv/helix/users');
+    cleanIds.slice(i, i + 100).forEach((id) => url.searchParams.append('id', id));
+    const res = await helixFetch(url.toString());
+    const json = await res.json();
+    if (json.data) {
+      result.push(
+        ...json.data.map((u) => ({
+          id: u.id,
+          login: u.login.toLowerCase(),
+          displayName: u.display_name,
+          avatarUrl: u.profile_image_url,
+          bannerUrl: u.offline_image_url
+        }))
+      );
+    }
+  }
+  return result;
+}
+
 // Полные данные о пользователе
 async function getUserDetailsHelix(userLogin) {
   const login = (userLogin || '').toLowerCase().trim();
@@ -1103,6 +1129,9 @@ ipcMain.handle('twitch:getChannelsLiveStatus', (e, logins) =>
 );
 ipcMain.handle('twitch:getUsersInfo', (e, logins) =>
   fetchUsersInfoHelix(logins)
+);
+ipcMain.handle('twitch:getUsersInfoById', (e, ids) =>
+  fetchUsersInfoByIdHelix(ids)
 );
 ipcMain.handle('twitch:getFollowedChannels', () =>
   fetchFollowedChannelsHelix()

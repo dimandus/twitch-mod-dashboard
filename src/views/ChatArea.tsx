@@ -14,6 +14,8 @@ import { useChatModeration } from '../hooks/useChatModeration';
 import type { ChatPane, ChatModeKey, ChatModes, ModerationAction } from '../types/chat';
 import { defaultModes } from '../types/chat';
 import * as styles from '../styles/chatArea.styles';
+import { useCollabStore } from '../stores/collabStore';
+import { useUserStore } from '../stores/userStore';
 
 interface ChatAreaProps {
   selectedChannel: string | null;
@@ -62,8 +64,64 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const ui = useChatAreaUI();
   const dragDrop = useChatDragDrop(chatPanes, onAddChat, onReorderChats);
   const moderation = useChatModeration(onModerationAction, ui.msgMenu, ui.setMsgMenu);
+  const setGlobalUsers = useUserStore(s => s.setGlobalUsers);
 
   const scrollContainersRef = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // --- COLLAB ROOM-ID -> LOGIN MAP ---
+  useEffect(() => {
+    const allRoomIds = new Set<string>();
+    for (const pane of chatPanes) {
+      for (const msg of pane.messages) {
+        if (msg.sourceRoomId) allRoomIds.add(msg.sourceRoomId);
+      }
+    }
+
+    const { roomIdToLogin, updateRoomIdToLogin } = useCollabStore.getState();
+    const missingRoomIds = Array.from(allRoomIds).filter(rid => !roomIdToLogin[rid]);
+    if (missingRoomIds.length === 0) return;
+
+    (async () => {
+      try {
+        const infos = await window.electronAPI.twitch.getUsersInfoById
+          ? await window.electronAPI.twitch.getUsersInfoById(missingRoomIds)
+          : [];
+        if (infos && infos.length) {
+          const updates: Record<string, string> = {};
+          for (const info of infos) {
+            if (info.id && info.login) updates[info.id] = info.login.toLowerCase();
+          }
+          if (Object.keys(updates).length) updateRoomIdToLogin(updates);
+
+          setGlobalUsers((prev) => {
+            const next = { ...prev };
+            for (const info of infos) {
+              if (!info.login) continue;
+              const loginLower = info.login.toLowerCase();
+              const existing = next[loginLower] || {
+                login: loginLower,
+                displayName: info.displayName || info.login,
+                color: undefined,
+                badges: [],
+                messages: [],
+                lastSeen: Date.now(),
+                avatarUrl: info.avatarUrl ?? null,
+                bannerUrl: info.bannerUrl ?? null
+              };
+
+              next[loginLower] = {
+                ...existing,
+                displayName: info.displayName || existing.displayName,
+                avatarUrl: info.avatarUrl ?? existing.avatarUrl ?? null,
+                bannerUrl: info.bannerUrl ?? existing.bannerUrl ?? null
+              };
+            }
+            return next;
+          });
+        }
+      } catch {}
+    })();
+  }, [chatPanes, setGlobalUsers]);
 
   const handleInputChange = (id: string, value: string) => {
     chatInput.handleInputChange(id, value);
@@ -389,6 +447,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     <div style={{ padding: '4px 18px 4px 8px' }}>
                       <ChatMessageItem
                         message={m}
+                        paneChannel={pane.channel}
                         textScale={textScale}
                         lineHeight={lineHeight}
                         badgeSets={ui.badgeSets}

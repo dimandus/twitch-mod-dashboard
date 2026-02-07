@@ -47,6 +47,10 @@ interface UserBasicInfo {
   bannerUrl: string | null;
 }
 
+interface UserBasicInfoById extends UserBasicInfo {
+  id: string;
+}
+
 interface ModeratedChannel {
   broadcaster_id: string;
   broadcaster_login: string;
@@ -128,6 +132,7 @@ interface TwitchAPI {
   getModeratedChannels: () => Promise<ModeratedChannel[]>;
   getChannelsLiveStatus: (logins: string[]) => Promise<ChannelLiveStatus[]>;
   getUsersInfo: (logins: string[]) => Promise<UserBasicInfo[]>;
+  getUsersInfoById: (ids: string[]) => Promise<UserBasicInfoById[]>;
   getFollowedChannels: () => Promise<FollowedChannel[]>;
   getGlobalBadges: () => Promise<any>;
   getChannelBadges?: (broadcasterId: string) => Promise<any>;

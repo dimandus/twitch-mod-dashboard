@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('twitch:getChannelsLiveStatus', logins),
     getUsersInfo: (logins) =>
       ipcRenderer.invoke('twitch:getUsersInfo', logins),
+    getUsersInfoById: (ids) =>
+      ipcRenderer.invoke('twitch:getUsersInfoById', ids),
     getFollowedChannels: () =>
       ipcRenderer.invoke('twitch:getFollowedChannels'),
 

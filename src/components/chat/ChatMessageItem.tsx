@@ -1,4 +1,7 @@
 import React, { useMemo } from 'react';
+import { useCollabStore } from '../../stores/collabStore';
+import { useUserStore } from '../../stores/userStore';
+import { ChannelIcon } from './ChannelIcon';
 import { Badges } from './Badges';
 import { MessageWithEmotes } from './MessageWithEmotes';
 import { ChatMessage } from '../../views/ChatArea';
@@ -7,6 +10,7 @@ import { checkAutoModTriggers } from '../../utils/autoModHelpers';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
+  paneChannel?: string;
   textScale: number;
   lineHeight: number;
   badgeSets: Record<string, Record<string, any>>;
@@ -16,6 +20,7 @@ interface ChatMessageItemProps {
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   message: m,
+  paneChannel,
   textScale,
   lineHeight,
   badgeSets,
@@ -55,6 +60,20 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   const isRaider = !!m.isRaider;
   const isFirstMessage = !!m.isFirstMessage;
   const isSharedChat = !!m.sourceRoomId;
+
+  // Получаем login по roomId из collabStore
+  const roomIdToLogin = useCollabStore(s => s.roomIdToLogin);
+  const collabLogin = m.sourceRoomId ? roomIdToLogin[m.sourceRoomId] : undefined;
+  const globalUsers = useUserStore(s => s.globalUsers);
+  const collabAvatarUrl = collabLogin
+    ? globalUsers[collabLogin.toLowerCase()]?.avatarUrl ?? null
+    : null;
+  const paneChannelLower = paneChannel?.toLowerCase();
+  const sourceChannelLower = m.sourceChannelName?.toLowerCase();
+  const showCollabAvatar =
+    isSharedChat &&
+    !!collabLogin &&
+    (!sourceChannelLower || !paneChannelLower || sourceChannelLower !== paneChannelLower);
 
   // Определяем фон сообщения
   const getMessageBackground = () => {
@@ -118,21 +137,21 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
       >
         {m.displayName || m.userLogin}:
       </span>
-      {isSharedChat && (
+      {showCollabAvatar && (
         <span
           style={{
-            fontSize: 9 * textScale,
-            color: '#a78bfa',
-            backgroundColor: '#2e1065',
-            padding: '1px 4px',
-            borderRadius: 3,
-            fontWeight: 600,
             marginRight: 4,
-            display: 'inline-block'
+            display: 'inline-flex',
+            alignItems: 'center'
           }}
-          title={`Сообщение из другого канала коллаборации${m.sourceChannelName ? `: ${m.sourceChannelName}` : ''}`}
+          title={`Сообщение из другого канала коллаборации${collabLogin ? `: ${collabLogin}` : ''}`}
         >
-          🔗{m.sourceChannelName || ''}
+          <ChannelIcon
+            channel={collabLogin}
+            avatarUrl={collabAvatarUrl}
+            size={14 * textScale}
+            style={{ verticalAlign: 'middle', background: '#18181b' }}
+          />
         </span>
       )}
       <span

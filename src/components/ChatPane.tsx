@@ -203,6 +203,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           <div style={{ padding: '4px 18px 4px 8px' }}>
             <ChatMessageItem
               message={m}
+              paneChannel={pane.channel}
               textScale={textScale}
               lineHeight={lineHeight}
               badgeSets={badgeSets}

@@ -31,6 +31,17 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
   useEffect(() => {
     let cancelled = false;
 
+    // ВРЕМЕННО: логировать все входящие сообщения (raw)
+    const debugLogRawMessage = (params: { channel: string; message: string; tags: any; self: boolean }) => {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG RAW MESSAGE]', JSON.stringify(params, null, 2));
+    };
+
+    // Подписка на сообщения
+    const unsub = twitchChatClient.onMessage((params) => {
+      debugLogRawMessage(params);
+    });
+
     const initChat = async () => {
       try {
         const user = await window.electronAPI.twitch.getCurrentUser();
@@ -49,7 +60,7 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
           logger.info('[useChatClient] Отключаемся от предыдущего пользователя');
           await twitchChatClient.disconnect();
         }
-
+      /*...*/
         setCurrentUserLogin(user.login.toLowerCase());
         currentUserLoginRef.current = user.login.toLowerCase();
 
@@ -419,6 +430,7 @@ export const useChatClient = (onMessageDeleted?: (channel: string, msgId: string
 
     return () => {
       cancelled = true;
+      unsub && unsub();
       twitchChatClient.disconnect().catch(() => {});
     };
   }, []);
